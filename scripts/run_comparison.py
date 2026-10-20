@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan or run matched 350M/7B and 1B/20B experiments on a TPU slice.
+"""Plan or run matched 125M/2.5B experiments on a TPU slice.
 
 The default prints a plan without training. --run trains both models
 sequentially using comparison config parameters (or optional --hparams),
@@ -16,7 +16,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SCALES = {"125m": 2_500_000_000, "350m": 7_000_000_000, "1b": 20_000_000_000}
+SCALES = {"125m": 2_500_000_000}
 
 
 def training_jobs(config, data_dir, selected=None, *, save_params=True):
@@ -116,7 +116,7 @@ def preflight(config, data_dir, benchmarks=None, recall=None, config_path=None):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--scale", choices=SCALES, default="350m")
+    p.add_argument("--scale", choices=SCALES, default="125m")
     p.add_argument("--config", type=Path)
     p.add_argument("--hparams", type=Path)
     p.add_argument("--data-dir", type=Path)
@@ -131,7 +131,7 @@ def main():
     a = p.parse_args()
     config_path = (a.config or ROOT / f"configs/comparison_{a.scale}.json").resolve()
     hparams = (a.hparams or ROOT / f"results/tuning_{a.scale}/selected.json").resolve()
-    data_dir = (a.data_dir or Path.home() / ("data/fw7b" if a.scale == "350m" else "data/fw20b")).resolve()
+    data_dir = (a.data_dir or Path.home() / "data/fw25").resolve()
     recall = (a.recall_benchmarks or Path.home() / f"data/recall_{a.scale}").resolve()
     group = a.group or f"comparison_{a.scale}"
     plan = build_plan(config_path, data_dir, a.benchmarks.resolve(), recall, group, a.eval_batch, hparams)

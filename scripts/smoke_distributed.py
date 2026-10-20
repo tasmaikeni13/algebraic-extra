@@ -22,7 +22,7 @@ from scripts.run_comparison import parameter_count, training_jobs
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--scale", choices=("125m", "350m", "1b"), default="350m")
+    p.add_argument("--scale", choices=("125m",), default="125m")
     p.add_argument("--hosts", default="w0,w1,w2,w3")
     p.add_argument("--arches",nargs="+",choices=("standard","algebraic"),default=["standard","algebraic"])
     p.add_argument("--group",help="Use a fresh run directory for this verification.")

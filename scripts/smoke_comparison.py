@@ -2,7 +2,7 @@
 """Smoke-test full model presets with one synthetic AdamW step per arm.
 
 Run on one isolated TPU chip:
-  bash scripts/tpu_python.sh 0 scripts/smoke_comparison.py --out results/verification/smoke_350m.json
+  bash scripts/tpu_python.sh 0 scripts/smoke_comparison.py --out results/verification/smoke_125m.json
 
 This uses the actual width, depth, 2,048-token context, 32,768 vocabulary,
 rematerialization, Pallas attention, and fused head. No FineWeb corpus is
@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--scale", choices=("125m", "350m", "1b"), default="350m")
+    p.add_argument("--scale", choices=("125m",), default="125m")
     p.add_argument("--tiny", action="store_true")
     p.add_argument("--out", type=Path, default=None)
     a = p.parse_args()
@@ -39,7 +39,7 @@ def main():
     if jax.default_backend() != "tpu":
         p.error("fused smoke checks require a TPU; use scripts/tpu_python.sh")
     jax.config.update("jax_enable_x64", False)
-    seq, batch = (128, 1) if a.tiny else (2048, 2 if a.scale == "350m" else 1)
+    seq, batch = (128, 1) if a.tiny else (2048, 4)
     settings = ["attn_impl=flash", "head_impl=fused"]
     if a.tiny:
         settings += ["d_model=128", "n_layers=1", "n_heads=2", "d_ff=256", "flash_block=128"]

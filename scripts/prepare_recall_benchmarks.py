@@ -18,7 +18,7 @@ from algebraic.recall_benchmarks import TASKS, build_example
 def main():
     from algebraic.tokenizer import get_tokenizer
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--config", type=Path, default=ROOT / "configs/post_training_eval.json")
+    p.add_argument("--config", type=Path, default=ROOT / "configs/comparison_125m.json")
     p.add_argument("--output-dir", type=Path, default=ROOT / "data/recall")
     p.add_argument("--trials", type=int, help="development override; mark dataset as limited")
     p.add_argument("--tokenizer", type=str, default="auto", help="Tokenizer name")

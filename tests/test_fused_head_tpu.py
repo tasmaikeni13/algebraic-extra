@@ -11,6 +11,15 @@ from algebraic import standard as S
 pytestmark = pytest.mark.skipif(jax.devices()[0].platform != "tpu", reason="needs a TPU")
 
 
+@pytest.fixture(autouse=True)
+def float32_pallas_context():
+    # When test_components.py enables x64, TPU Mosaic cannot lower the resulting
+    # float64 literal casts. Guard all tests in this file with float32 context.
+    enable_x64 = jax.enable_x64 if hasattr(jax, "enable_x64") else jax.experimental.enable_x64
+    with enable_x64(False):
+        yield
+
+
 @pytest.mark.parametrize("kind,n,c", [("ce", 16, 16.0), ("alg_ce", 16, 16.0), ("alg_ce", 8, 2.0)])
 @pytest.mark.parametrize("V", [32768, 4096])
 def test_fused_head_matches_dense(kind, n, c, V):
@@ -43,7 +52,7 @@ def test_fused_head_matches_dense(kind, n, c, V):
         assert cos > 0.999
 
 
-@pytest.mark.parametrize("width", [1024, 1536])
+@pytest.mark.parametrize("width", [768])
 @pytest.mark.parametrize("kind", ["ce", "alg_ce"])
 def test_production_head_tiles_at_model_widths(width, kind):
     """New low-memory defaults against an independent dense projection/VJP."""

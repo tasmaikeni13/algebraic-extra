@@ -48,7 +48,7 @@ def main():
                                        "sha256": hashlib.sha256(encoded.encode()).hexdigest()}
         write_json(subset / "metadata.json", meta)
         for arch in ("standard", "algebraic"):
-            cfg = build(arch, "350m", d_model=128, n_layers=1, n_heads=2, d_ff=256,
+            cfg = build(arch, "125m", d_model=128, n_layers=1, n_heads=2, d_ff=256,
                         seq_len=2048, dtype="bfloat16", attn_impl="flash" if jax.default_backend()=="tpu" else "dense")
             scorer = Scorer(cfg, init_params(cfg, jax.random.PRNGKey(42)), batch=1)
             public, public_predictions = public_evaluate(scorer, a.benchmarks, PUBLIC_TASKS, limit=1)

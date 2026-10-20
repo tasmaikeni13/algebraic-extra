@@ -20,7 +20,7 @@ def load(scale):
     return json.loads((ROOT / f"configs/comparison_{scale}.json").read_text())
 
 
-@pytest.mark.parametrize("scale", ["350m", "1b"])
+@pytest.mark.parametrize("scale", ["125m"])
 def test_real_parameter_shapes_and_plan(scale):
     c = load(scale)
     for arch in c["architectures"]:
@@ -70,5 +70,4 @@ def test_exhausted_shards_never_publish_zero_filled_data(monkeypatch, tmp_path):
 
 
 def test_published_token_filenames():
-    assert data.train_filename(7_000_000_000) == "fineweb_train_7B.npy"
-    assert data.train_filename(20_000_000_000) == "fineweb_train_20B.npy"
+    assert data.train_filename(2_500_000_000) == "fineweb_train_2_5B.npy"

@@ -156,6 +156,12 @@ def _attention(q, k, v, sink_logit, cfg: LMConfig):
 
 
 def _qk_norm(x, gain, cfg: LMConfig):
+    if (cfg.attn_impl == "flash" and cfg.attn == "asinh" and x.dtype == jnp.bfloat16
+            and x.shape[-1] == 64 and (x.size // 64) % 1024 == 0
+            and gain.dtype == F32 and cfg.eps > 0
+            and jax.devices()[0].platform == "tpu"):
+        from algebraic.kernels.qk_norm import qk_rms_norm
+        return qk_rms_norm(x, gain, cfg.eps)
     return A.rms_norm(x, gain, cfg.eps)
 
 

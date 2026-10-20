@@ -20,8 +20,26 @@ from algebraic.benchmarking import (RECALL_PROTOCOL, Scorer, load_model, provena
 from algebraic.recall_benchmarks import TASKS, generated_metrics, summarize, validate_example
 
 
+def find_recall_benchmarks(specified=None) -> Path:
+    if specified is not None:
+        p = Path(specified)
+        if p.is_dir() and (p / "metadata.json").is_file():
+            return p
+    candidates = [
+        Path.home() / "data/recall_llama32k",
+        Path.home() / "data/recall",
+        ROOT / "data/recall_llama32k",
+        ROOT / "data/recall",
+    ]
+    for c in candidates:
+        if c.is_dir() and (c / "metadata.json").is_file():
+            return c
+    return Path.home() / "data/recall_llama32k"
+
+
 def evaluate(scorer, benchmarks, tasks, limit=None):
     import numpy as np
+    benchmarks = find_recall_benchmarks(benchmarks)
     meta = json.loads((benchmarks / "metadata.json").read_text())
     valid_tokenizers = ("llama32k", "gp" + "t2")
     if meta["protocol"] != RECALL_PROTOCOL or meta["tokenizer"] not in valid_tokenizers:
@@ -70,7 +88,7 @@ def evaluate(scorer, benchmarks, tasks, limit=None):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("run", type=Path)
-    p.add_argument("--benchmarks", type=Path, default=Path.home() / "data/recall")
+    p.add_argument("--benchmarks", type=Path, default=Path.home() / "data/recall_llama32k" if (Path.home() / "data/recall_llama32k").exists() else Path.home() / "data/recall")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--tasks", default=",".join(TASKS))
     p.add_argument("--batch", type=int, default=8)

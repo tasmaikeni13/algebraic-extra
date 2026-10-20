@@ -6,8 +6,8 @@ its share of the global batch inside ``shard_map`` (so Pallas kernels need no
 SPMD partitioning), and gradients are averaged with ``pmean``.
 
 Example (single chip):
-  python -m algebraic.train --preset standard --size proxy --steps 4000 \
-      --batch 64 --micro 16 --out runs/std
+  python -m algebraic.train --preset standard --size 125m --steps 2385 \
+      --batch 512 --micro 4 --out runs/std
 Component overrides: ``--set attn_n=16 --set head=alg_ce``.
 """
 
@@ -48,16 +48,16 @@ def parse_overrides(pairs):
 def get_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--preset", default="standard")
-    p.add_argument("--size", default="proxy")
+    p.add_argument("--size", default="125m", choices=("125m", "proxy"))
     p.add_argument("--set", action="append", default=[], help="config override key=value")
-    p.add_argument("--train", default=os.path.expanduser("~/data/tok/fineweb1b_train.npy"))
-    p.add_argument("--valid", default=os.path.expanduser("~/data/tok/fineweb1b_valid.npy"))
-    p.add_argument("--seq-len", type=int, default=1024)
-    p.add_argument("--batch", type=int, default=64, help="global batch in sequences")
-    p.add_argument("--micro", type=int, default=16, help="per-device micro-batch in sequences")
+    p.add_argument("--train", default=os.path.expanduser("~/data/tok/fineweb_train_2_5B.npy"))
+    p.add_argument("--valid", default=os.path.expanduser("~/data/tok/fineweb_valid.npy"))
+    p.add_argument("--seq-len", type=int, default=2048)
+    p.add_argument("--batch", type=int, default=512, help="global batch in sequences")
+    p.add_argument("--micro", type=int, default=4, help="per-device micro-batch in sequences")
     p.add_argument("--steps", type=int, default=0, help="optimizer steps (0: use --tokens)")
     p.add_argument("--tokens", type=float, default=0, help="token budget, rounded up to full steps")
-    p.add_argument("--lr", type=float, default=2e-3)
+    p.add_argument("--lr", type=float, default=3e-3)
     p.add_argument("--min-lr-ratio", type=float, default=0.1)
     p.add_argument("--warmup", type=float, default=0.02, help="fraction (<1) or steps (>=1)")
     p.add_argument("--schedule", default="cosine", choices=("cosine", "ards", "wsd", "linear"))

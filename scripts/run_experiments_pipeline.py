@@ -11,13 +11,13 @@ Workflow:
    - Zero-checkpoint retention during sweep to preserve disk space
 2. Automatic selection of best learning rate per architecture by validation NLL.
 3. Storage maintenance across all 4 workers (w0, w1, w2, w3).
-4. Automatic commit and push of sweep results and summary to GitHub.
+4. Automatic commit of sweep results and summary.
 5. Phase 2: Main 125M comparison runs on 2.5B tokens:
    - Standard Transformer vs Pure Algebraic Transformer
    - 5 seeds each (42, 43, 44, 45, 46) -> 10 runs total
    - Full model weight export (params.npz) and result.json
    - Post-run checkpoint pruning to keep disk storage free (<30% disk usage at all times).
-6. Final summary and push of main comparison results to GitHub.
+6. Final summary of main comparison results.
 """
 
 from __future__ import annotations
@@ -279,8 +279,8 @@ def run_phase1_sweep():
     # Clean intermediate logs/tmp
     clean_storage(HOSTS)
 
-    # Push to GitHub
-    print("\nPushing Phase 1 hyperparameter sweep results to GitHub...", flush=True)
+    # Commit sweep results locally (remote git push disabled per R5)
+    print("\nRecording Phase 1 hyperparameter sweep results...", flush=True)
     subprocess.run(["git", "add", "results/hparam_sweep/"], cwd=ROOT, check=True)
     status = subprocess.check_output(["git", "status", "--porcelain", "results/hparam_sweep/"], cwd=ROOT, text=True)
     if status.strip():
@@ -288,8 +288,7 @@ def run_phase1_sweep():
             ["git", "commit", "-m", f"Record 125M hyperparameter sweep results (Std: {selected['standard']['lr']}, Alg: {selected['algebraic']['lr']})"],
             cwd=ROOT, check=True
         )
-        subprocess.run(["git", "push", "origin", "main"], cwd=ROOT, check=True)
-        print("Phase 1 sweep successfully pushed to GitHub!", flush=True)
+        print("Notice: Remote git push disabled in accordance with R5 safety constraints.", flush=True)
     else:
         print("Results already committed.", flush=True)
 
@@ -378,8 +377,8 @@ def run_phase2_main(selected_lrs):
     }
     (results_dir / "comparison_summary.json").write_text(json.dumps(final_report, indent=2))
 
-    # Push final results
-    print("\nPushing final main comparison results to GitHub...", flush=True)
+    # Commit final results locally (remote git push disabled per R5)
+    print("\nRecording final main comparison results...", flush=True)
     subprocess.run(["git", "add", "results/main_125m/"], cwd=ROOT, check=True)
     status = subprocess.check_output(["git", "status", "--porcelain", "results/main_125m/"], cwd=ROOT, text=True)
     if status.strip():
@@ -387,8 +386,7 @@ def run_phase2_main(selected_lrs):
             ["git", "commit", "-m", "Record completed 125M main comparison runs across 5 seeds on 2.5B tokens"],
             cwd=ROOT, check=True
         )
-        subprocess.run(["git", "push", "origin", "main"], cwd=ROOT, check=True)
-        print("Main run comparison results pushed to GitHub!", flush=True)
+        print("Notice: Remote git push disabled in accordance with R5 safety constraints.", flush=True)
 
     print(f"\n[{ist_now_str()}] ALL RUNS COMPLETED SUCCESSFULLY!", flush=True)
 

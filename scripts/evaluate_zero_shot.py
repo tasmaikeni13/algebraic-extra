@@ -20,8 +20,26 @@ from algebraic.benchmarking import (PUBLIC_TASKS, ZERO_SHOT_PROTOCOL, Scorer,
                                    load_jsonl, load_model, provenance, read_dataset, sha256_file, write_json)
 
 
+def find_public_benchmarks(specified=None) -> Path:
+    if specified is not None:
+        p = Path(specified)
+        if p.is_dir() and (p / "metadata.json").is_file():
+            return p
+    candidates = [
+        Path.home() / "data/evals",
+        ROOT / "data/evals",
+        ROOT / "data/benchmarks",
+        Path.home() / "data/benchmarks",
+    ]
+    for c in candidates:
+        if c.is_dir() and (c / "metadata.json").is_file():
+            return c
+    return Path.home() / "data/evals"
+
+
 def evaluate(scorer, benchmarks, tasks, limit=None):
     import numpy as np
+    benchmarks = find_public_benchmarks(benchmarks)
     results, predictions, datasets = {}, [], {}
     t0 = time.monotonic()
     for name in tasks:

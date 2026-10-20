@@ -17,7 +17,7 @@
     },
     "vocab_size": 32768,
     "tokens": 2500000000,
-    "train_file": "fineweb_train_2.5B.npy",
+    "train_file": "fineweb_train_2_5B.npy",
     "valid_file": "fineweb_valid.npy",
     "seq_len": 2048,
     "batch": 512,

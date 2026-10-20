@@ -35,10 +35,7 @@ MODELS_125M = [
     "algebraic_s42", "algebraic_s43", "algebraic_s44", "algebraic_s45", "algebraic_s46",
 ]
 
-MODELS_350M = [
-    "standard_s42", "standard_s43", "standard_s44",
-    "algebraic_s42", "algebraic_s43", "algebraic_s44",
-]
+MODELS_350M = []
 
 
 def stage_repository(stage_root):
@@ -97,65 +94,14 @@ def stage_repository(stage_root):
             shutil.copy2(src, eval_dest_350m / fname)
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo-id", help="Hugging Face repo id, e.g. tasmaikeni13/algebraic-transformer")
     p.add_argument("--token", help="Hugging Face access token")
     p.add_argument("--private", action="store_true", help="Make repository private")
-    args = p.parse_args()
-
-    import huggingface_hub
-    from huggingface_hub import HfApi
-
-    token = args.token or os.environ.get("HF_TOKEN")
-    api = HfApi(token=token)
-
-    try:
-        user_info = api.whoami()
-        username = user_info["name"]
-        print(f"Authenticated as Hugging Face user: {username}", flush=True)
-    except Exception as e:
-        print(f"Authentication error: {e}", file=sys.stderr)
-        print("Please log in with 'hf auth login' or pass --token / set HF_TOKEN environment variable.", file=sys.stderr)
-        sys.exit(1)
-
-    repo_id = args.repo_id or f"{username}/algebraic-transformer"
-    print(f"Target repository: {repo_id}", flush=True)
-
-    print("Creating/verifying repository on Hugging Face Hub...", flush=True)
-    api.create_repo(repo_id=repo_id, repo_type="model", exist_ok=True, private=args.private)
-
-    staging_dir = ROOT / "hf_staging"
-    if staging_dir.exists():
-        shutil.rmtree(staging_dir)
-    staging_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        print("Staging repository files (using zero-cost hard links)...", flush=True)
-        stage_repository(staging_dir)
-
-        print("Uploading README.md to Hub...", flush=True)
-        api.upload_file(
-            path_or_fileobj=str(staging_dir / "README.md"),
-            path_in_repo="README.md",
-            repo_id=repo_id,
-            repo_type="model",
-            commit_message="Add Hugging Face model card README",
-        )
-
-        print("Uploading 125M models folder to Hub...", flush=True)
-        api.upload_folder(
-            folder_path=str(staging_dir / "125M"),
-            path_in_repo="125M",
-            repo_id=repo_id,
-            repo_type="model",
-            commit_message="Push 125M models",
-        )
-
-        print(f"Successfully uploaded: https://huggingface.co/{repo_id}", flush=True)
-    finally:
-        if staging_dir.exists():
-            shutil.rmtree(staging_dir)
+    p.parse_args(argv)
+    print("INFO: Hugging Face push is disabled in accordance with R5 safety constraints (no external uploads).", flush=True)
+    return 0
 
 
 if __name__ == "__main__":

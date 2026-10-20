@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Download and tokenize a complete FineWeb-Edu corpus with 32k BPE.
 
-The 7B experiment uses --train-tokens 7000000000.
+The 125M experiment uses --train-tokens 2500000000.
 Data is published only after every quota is filled. Validation and training
 use separate documents; source shards come from an immutable Hub revision.
 """
@@ -25,7 +25,7 @@ EOT = 2
 
 
 def train_filename(tokens):
-    label = {2_500_000_000: "2_5B", 7_000_000_000: "7B", 20_000_000_000: "20B"}.get(tokens, str(tokens))
+    label = {2_500_000_000: "2_5B"}.get(tokens, str(tokens))
     return f"fineweb_train_{label}.npy"
 
 
@@ -73,7 +73,7 @@ def sha256_file(path):
 
 
 def sweep_filename(tokens):
-    label = {600_000_000: "600M", 2_000_000_000: "2B"}.get(tokens, str(tokens))
+    label = {600_000_000: "600M"}.get(tokens, str(tokens))
     return f"fineweb_sweep_{label}.npy"
 
 

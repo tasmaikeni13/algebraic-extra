@@ -85,8 +85,8 @@ def reusable(output, run, data, tasks, protocol, batch):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--config", type=Path, default=ROOT / "configs/comparison_350m.json",
-                   help="comparison configuration file; default configs/comparison_350m.json")
+    p.add_argument("--config", type=Path, default=ROOT / "configs/comparison_125m.json",
+                   help="comparison configuration file; default configs/comparison_125m.json")
     p.add_argument("--hparams", type=Path, help="completed budget-sweep selection for this configuration")
     p.add_argument("--runs-root", type=Path, help="root directory for model runs; default runs/<config_stem>")
     p.add_argument("--benchmarks", type=Path, default=Path.home() / "data/evals")

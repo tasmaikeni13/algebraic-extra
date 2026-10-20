@@ -8,9 +8,6 @@ from algebraic.model import LMConfig
 SIZES: Dict[str, Dict[str, int]] = {
     "proxy": dict(d_model=384, n_layers=8, n_heads=6, d_ff=1024),
     "125m": dict(d_model=768, n_layers=12, n_heads=12, d_ff=2048),
-    # Tied 32k BPE embedding; both arms have approximately 332.45M parameters.
-    "350m": dict(d_model=1024, n_layers=24, n_heads=16, d_ff=2688),
-    "1b": dict(d_model=1536, n_layers=32, n_heads=24, d_ff=4224),
 }
 
 
@@ -38,5 +35,19 @@ def algebraic(size: str = "proxy", **overrides) -> LMConfig:
 PRESETS = {"standard": standard, "algebraic": algebraic}
 
 
-def build(preset: str, size: str, **overrides) -> LMConfig:
-    return PRESETS[preset](size, **overrides)
+def build(preset: str, size: str = "125m", **overrides) -> LMConfig:
+    """Build an LMConfig for a standard, algebraic, or hybrid preset.
+
+    Keeps PRESETS strictly limited to {"standard", "algebraic"} for backward
+    compatibility, and delegates hybrid presets to hybrid.registry.HYBRID_PRESETS.
+    """
+    if preset in PRESETS:
+        return PRESETS[preset](size, **overrides)
+    try:
+        from hybrid.registry import HYBRID_PRESETS
+        if preset in HYBRID_PRESETS:
+            return HYBRID_PRESETS[preset](size, **overrides)
+    except ImportError:
+        pass
+    raise KeyError(f"unknown preset {preset!r}")
+

@@ -15,7 +15,7 @@ def test_resume_reproduces_weights_and_rejects_recipe_changes(tmp_path, preset):
     for name in ("train", "valid"):
         np.save(tmp_path / f"{name}.npy", rng.integers(0, 97, 512, dtype=np.uint16))
     run = tmp_path / "run"
-    args = ["--preset", preset, "--size", "350m", "--steps", "2", "--seq-len", "16",
+    args = ["--preset", preset, "--size", "125m", "--steps", "2", "--seq-len", "16",
             "--batch", "2", "--micro", "1", "--eval-batch", "1", "--eval-tokens", "32",
             "--train", str(tmp_path / "train.npy"), "--valid", str(tmp_path / "valid.npy"),
             "--set", "d_model=64", "--set", "n_layers=1", "--set", "n_heads=1", "--set", "d_ff=96",

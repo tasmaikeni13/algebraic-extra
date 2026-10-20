@@ -38,37 +38,14 @@ Evaluation includes ARC-Easy, ARC-Challenge, HellaSwag, PIQA, OpenBookQA, WinoGr
     out_path.write_text(header + (comparison_md.read_text() if comparison_md and comparison_md.is_file() else ""))
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo-id", default="tasmaikeni13/algebraic-transformer")
     p.add_argument("--runs-root", type=Path, default=ROOT / "runs/main")
     p.add_argument("--results-root", type=Path, default=ROOT / "results/main")
     p.add_argument("--private", action="store_true")
-    a = p.parse_args()
-    cli = shutil.which("hf") or shutil.which("huggingface-cli")
-    if cli is None:
-        raise SystemExit("Install huggingface_hub and authenticate its CLI before uploading.")
-    runs = [run for run in sorted(a.runs_root.iterdir()) if run.is_dir() and (run / "params.npz").is_file()]
-    if not runs or not (a.results_root / "comparison.json").is_file():
-        raise ValueError("completed checkpoints and a measured comparison are required")
-    for run in runs:
-        result = json.loads((run / "result.json").read_text())
-        if result.get("completed_steps", result["total_steps"]) != result["total_steps"]:
-            raise ValueError(f"incomplete training: {run}")
-    with tempfile.TemporaryDirectory(prefix="algebraic-hub-") as directory:
-        stage = Path(directory)
-        generate_model_card(stage / "README.md", a.results_root / "comparison.md")
-        for run in runs:
-            target = stage / "checkpoints" / run.name
-            target.mkdir(parents=True)
-            for name in ("params.npz", "meta.json", "result.json"):
-                shutil.copy2(run / name, target / name)
-        shutil.copytree(a.results_root, stage / "evaluations")
-        command = [cli, "upload", a.repo_id, str(stage), ".", "--commit-message", "Publish Algebraic Transformer checkpoints and measured evaluations"]
-        if a.private:
-            command += ["--private"]
-        subprocess.run(command, check=True)
-    print(f"Uploaded: https://huggingface.co/{a.repo_id}")
+    p.parse_args(argv)
+    print("INFO: Hugging Face upload is disabled in accordance with R5 safety constraints (no external uploads).", flush=True)
     return 0
 
 
