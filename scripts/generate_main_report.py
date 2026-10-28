@@ -67,10 +67,12 @@ def main():
     print("Wrote results/main_125m_summary.json")
 
     # Generate Markdown report
+    first_opt = list(summary["optimizers"].keys())[0]
+    num_seeds = len(summary["optimizers"][first_opt]["seeds"])
     md = []
-    md.append("# 125M Main Training Runs Report (2.5B Tokens, 3 Seeds per Optimizer)")
+    md.append(f"# 125M Main Training Runs Report (2.5B Tokens, {num_seeds} Seeds per Optimizer)")
     md.append("")
-    md.append("**Date Completed:** 2026-10-28 16:25:02 IST  ")
+    md.append(f"**Date Completed:** {summary['created_at']}  ")
     md.append("**Cluster Hardware:** Cloud TPU v4-32 (16 TPUs across 4 workers: `w0`, `w1`, `w2`, `w3`)  ")
     md.append("**Model Architecture:** 125M Algebraic Transformer (`vocab_size=32768`, `d_model=768`, `n_layers=12`, `n_heads=12`, `d_ff=2048`, `seq_len=2048`)  ")
     md.append("**Kernel Acceleration:** FlashAttention Pallas (`flash_block=512`) + Algebraic Fused Cross-Entropy Head (`head_block_n=128`, `head_block_v=512`)  ")
@@ -98,7 +100,8 @@ def main():
         loss_str = f"{stats['mean_final_train_loss']:.4f} ± {stats['std_final_train_loss']:.4f}"
         tok_str = f"{stats['mean_tok_per_s']:,.0f} tok/s"
         time_str = f"{stats['mean_total_time_seconds']/60:.2f} min"
-        md.append(f"| {disp} | `42, 43, 44` | **{nll_str}** | **{ppl_str}** | {loss_str} | {tok_str} | {time_str} |")
+        seeds_str = ", ".join(str(s) for s in stats["seeds"])
+        md.append(f"| {disp} | `{seeds_str}` | **{nll_str}** | **{ppl_str}** | {loss_str} | {tok_str} | {time_str} |")
 
     md.append("")
     md.append("> [!NOTE]")
