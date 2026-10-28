@@ -1,0 +1,249 @@
+{
+  "created_at": "2026-10-28 23:25:32 IST",
+  "model_architecture": "125M Standard Transformer (SwiGLU, RoPE, Softmax, CE)",
+  "budget_per_arm": "600M tokens (573 steps)",
+  "selected_winners": {
+    "muon_adamw": {
+      "name": "std_125m_muon_adamw_base_s42",
+      "optimizer": "muon_adamw",
+      "lr": 0.002,
+      "wd": 0.1,
+      "muon_lr": 0.02,
+      "muon_wd": 0.1,
+      "cautious_eps": null,
+      "final_eval_nll": 3.1826791958730727,
+      "final_eval_ppl": 24.111265896956464,
+      "final_train_loss": 3.1324567794799805,
+      "train_seconds": 381.96327114105225
+    },
+    "cadamw": {
+      "name": "std_125m_cadamw_lr_1e3_s42",
+      "optimizer": "cadamw",
+      "lr": 0.001,
+      "wd": 0.1,
+      "muon_lr": null,
+      "muon_wd": null,
+      "cautious_eps": 0.001,
+      "final_eval_nll": 3.7080907313550107,
+      "final_eval_ppl": 40.77588005012143,
+      "final_train_loss": 3.689495086669922,
+      "train_seconds": 374.0946943759918
+    },
+    "hybrid_muon_cadamw": {
+      "name": "std_125m_hybrid_muon_cadamw_base_s42",
+      "optimizer": "hybrid_muon_cadamw",
+      "lr": 0.002,
+      "wd": 0.1,
+      "muon_lr": 0.02,
+      "muon_wd": 0.1,
+      "cautious_eps": 0.001,
+      "final_eval_nll": 3.178370608658087,
+      "final_eval_ppl": 24.007603883752534,
+      "final_train_loss": 3.1288743019104004,
+      "train_seconds": 382.0599751472473
+    }
+  },
+  "results_by_optimizer": {
+    "muon_adamw": [
+      {
+        "name": "std_125m_muon_adamw_base_s42",
+        "optimizer": "muon_adamw",
+        "lr": 0.002,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": null,
+        "final_eval_nll": 3.1826791958730727,
+        "final_eval_ppl": 24.111265896956464,
+        "final_train_loss": 3.1324567794799805,
+        "train_seconds": 381.96327114105225
+      },
+      {
+        "name": "std_125m_muon_adamw_canonical_s42",
+        "optimizer": "muon_adamw",
+        "lr": 0.0006,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": null,
+        "final_eval_nll": 3.3033273845422464,
+        "final_eval_ppl": 27.20300335153485,
+        "final_train_loss": 3.264786720275879,
+        "train_seconds": 381.28478145599365
+      },
+      {
+        "name": "std_125m_muon_adamw_canonical_low_muon_s42",
+        "optimizer": "muon_adamw",
+        "lr": 0.0006,
+        "wd": 0.1,
+        "muon_lr": 0.01,
+        "muon_wd": 0.1,
+        "cautious_eps": null,
+        "final_eval_nll": 3.433904815892704,
+        "final_eval_ppl": 30.997446058843547,
+        "final_train_loss": 3.402374505996704,
+        "train_seconds": 381.4130425453186
+      },
+      {
+        "name": "std_125m_muon_adamw_mid_lr_s42",
+        "optimizer": "muon_adamw",
+        "lr": 0.001,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": null,
+        "final_eval_nll": 3.2384601381958507,
+        "final_eval_ppl": 25.49443360143588,
+        "final_train_loss": 3.1958017349243164,
+        "train_seconds": 381.10227632522583
+      },
+      {
+        "name": "std_125m_muon_adamw_low_lr_s42",
+        "optimizer": "muon_adamw",
+        "lr": 0.001,
+        "wd": 0.1,
+        "muon_lr": 0.01,
+        "muon_wd": 0.1,
+        "cautious_eps": null,
+        "final_eval_nll": 3.353862211352489,
+        "final_eval_ppl": 28.613030082196875,
+        "final_train_loss": 3.318901538848877,
+        "train_seconds": 381.2898209095001
+      }
+    ],
+    "cadamw": [
+      {
+        "name": "std_125m_cadamw_lr_6e4_s42",
+        "optimizer": "cadamw",
+        "lr": 0.0006,
+        "wd": 0.1,
+        "muon_lr": null,
+        "muon_wd": null,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.893182680255077,
+        "final_eval_ppl": 49.06680221982127,
+        "final_train_loss": 3.8787879943847656,
+        "train_seconds": 373.55192494392395
+      },
+      {
+        "name": "std_125m_cadamw_lr_8e4_s42",
+        "optimizer": "cadamw",
+        "lr": 0.0008,
+        "wd": 0.1,
+        "muon_lr": null,
+        "muon_wd": null,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.738185272842157,
+        "final_eval_ppl": 42.02166307632114,
+        "final_train_loss": 3.720120906829834,
+        "train_seconds": 372.843373298645
+      },
+      {
+        "name": "std_125m_cadamw_lr_1e3_s42",
+        "optimizer": "cadamw",
+        "lr": 0.001,
+        "wd": 0.1,
+        "muon_lr": null,
+        "muon_wd": null,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.7080907313550107,
+        "final_eval_ppl": 40.77588005012143,
+        "final_train_loss": 3.689495086669922,
+        "train_seconds": 374.0946943759918
+      },
+      {
+        "name": "std_125m_cadamw_lr_4e4_s42",
+        "optimizer": "cadamw",
+        "lr": 0.0004,
+        "wd": 0.1,
+        "muon_lr": null,
+        "muon_wd": null,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 4.15787329439257,
+        "final_eval_ppl": 63.935406124685535,
+        "final_train_loss": 4.146778583526611,
+        "train_seconds": 373.939813375473
+      },
+      {
+        "name": "std_125m_cadamw_lr_15e4_s42",
+        "optimizer": "cadamw",
+        "lr": 0.0015,
+        "wd": 0.1,
+        "muon_lr": null,
+        "muon_wd": null,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.726260998209969,
+        "final_eval_ppl": 41.523560880996214,
+        "final_train_loss": 3.7089858055114746,
+        "train_seconds": 373.7818675041199
+      }
+    ],
+    "hybrid_muon_cadamw": [
+      {
+        "name": "std_125m_hybrid_muon_cadamw_canonical_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "lr": 0.0006,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.2945015352280413,
+        "final_eval_ppl": 26.96397013029094,
+        "final_train_loss": 3.254922866821289,
+        "train_seconds": 380.6253092288971
+      },
+      {
+        "name": "std_125m_hybrid_muon_cadamw_canonical_low_muon_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "lr": 0.0006,
+        "wd": 0.1,
+        "muon_lr": 0.01,
+        "muon_wd": 0.1,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.4180073347248014,
+        "final_eval_ppl": 30.508561060178117,
+        "final_train_loss": 3.386237859725952,
+        "train_seconds": 380.62040185928345
+      },
+      {
+        "name": "std_125m_hybrid_muon_cadamw_mid_lr_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "lr": 0.001,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.2321610294404577,
+        "final_eval_ppl": 25.334346125074454,
+        "final_train_loss": 3.1885790824890137,
+        "train_seconds": 382.1957895755768
+      },
+      {
+        "name": "std_125m_hybrid_muon_cadamw_low_lr_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "lr": 0.001,
+        "wd": 0.1,
+        "muon_lr": 0.01,
+        "muon_wd": 0.1,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.345071159425329,
+        "final_eval_ppl": 28.3625938607259,
+        "final_train_loss": 3.3092610836029053,
+        "train_seconds": 381.7108907699585
+      },
+      {
+        "name": "std_125m_hybrid_muon_cadamw_base_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "lr": 0.002,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.178370608658087,
+        "final_eval_ppl": 24.007603883752534,
+        "final_train_loss": 3.1288743019104004,
+        "train_seconds": 382.0599751472473
+      }
+    ]
+  }
+}
