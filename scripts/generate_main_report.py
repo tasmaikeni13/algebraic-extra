@@ -27,7 +27,7 @@ def main():
         all_runs[run_name] = res
 
     summary = {
-        "created_at": "2026-10-28 16:30:00 IST",
+        "created_at": "2026-10-28 21:28:00 IST",
         "model_scale": "125M",
         "dataset": "FineWeb-Edu (2.5B tokens)",
         "cluster": "Cloud TPU v4-32 (16 TPUs across 4 workers: w0, w1, w2, w3)",
@@ -103,9 +103,12 @@ def main():
         seeds_str = ", ".join(str(s) for s in stats["seeds"])
         md.append(f"| {disp} | `{seeds_str}` | **{nll_str}** | **{ppl_str}** | {loss_str} | {tok_str} | {time_str} |")
 
+    h_stats = summary["optimizers"]["hybrid_muon_cadamw"]
+    m_stats = summary["optimizers"]["muon_adamw"]
+    c_stats = summary["optimizers"]["cadamw"]
     md.append("")
     md.append("> [!NOTE]")
-    md.append("> **Key Takeaway:** **Hybrid Muon + C-AdamW** achieved the best overall validation performance across all 3 random seeds (mean NLL **2.7869** / PPL **16.23**), closely followed by **Muon + AdamW** (mean NLL **2.7887** / PPL **16.26**). Both Muon-based optimizers significantly outperformed standard **C-AdamW** (mean NLL **2.8860** / PPL **17.92**), delivering an **~10% relative reduction in held-out perplexity** (16.23 vs 17.92) for a negligible throughput cost (<1.4% overhead from Newton-Schulz iterations).")
+    md.append(f"> **Key Takeaway:** **Hybrid Muon + C-AdamW** achieved the best overall validation performance across all {num_seeds} random seeds (mean NLL **{h_stats['mean_eval_nll']:.4f}** / PPL **{h_stats['mean_eval_ppl']:.2f}**), closely followed by **Muon + AdamW** (mean NLL **{m_stats['mean_eval_nll']:.4f}** / PPL **{m_stats['mean_eval_ppl']:.2f}**). Both Muon-based optimizers significantly outperformed standard **C-AdamW** (mean NLL **{c_stats['mean_eval_nll']:.4f}** / PPL **{c_stats['mean_eval_ppl']:.2f}**), delivering an **~10% relative reduction in held-out perplexity** ({h_stats['mean_eval_ppl']:.2f} vs {c_stats['mean_eval_ppl']:.2f}) for a negligible throughput cost (<1.4% overhead from Newton-Schulz iterations).")
     md.append("")
     md.append("---")
     md.append("")

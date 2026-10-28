@@ -1,6 +1,6 @@
 # 125M Main Training Runs Report (2.5B Tokens, 5 Seeds per Optimizer)
 
-**Date Completed:** 2026-10-28 16:30:00 IST  
+**Date Completed:** 2026-10-28 21:28:00 IST  
 **Cluster Hardware:** Cloud TPU v4-32 (16 TPUs across 4 workers: `w0`, `w1`, `w2`, `w3`)  
 **Model Architecture:** 125M Algebraic Transformer (`vocab_size=32768`, `d_model=768`, `n_layers=12`, `n_heads=12`, `d_ff=2048`, `seq_len=2048`)  
 **Kernel Acceleration:** FlashAttention Pallas (`flash_block=512`) + Algebraic Fused Cross-Entropy Head (`head_block_n=128`, `head_block_v=512`)  
@@ -18,7 +18,7 @@
 | **Cautious AdamW (C-AdamW)** | `42, 43, 44, 45, 46` | **2.8868 ± 0.0035** | **17.94 ± 0.06** | 2.8423 ± 0.0097 | 1,575,246 tok/s | 27.06 min |
 
 > [!NOTE]
-> **Key Takeaway:** **Hybrid Muon + C-AdamW** achieved the best overall validation performance across all 3 random seeds (mean NLL **2.7869** / PPL **16.23**), closely followed by **Muon + AdamW** (mean NLL **2.7887** / PPL **16.26**). Both Muon-based optimizers significantly outperformed standard **C-AdamW** (mean NLL **2.8860** / PPL **17.92**), delivering an **~10% relative reduction in held-out perplexity** (16.23 vs 17.92) for a negligible throughput cost (<1.4% overhead from Newton-Schulz iterations).
+> **Key Takeaway:** **Hybrid Muon + C-AdamW** achieved the best overall validation performance across all 5 random seeds (mean NLL **2.7864** / PPL **16.22**), closely followed by **Muon + AdamW** (mean NLL **2.7881** / PPL **16.25**). Both Muon-based optimizers significantly outperformed standard **C-AdamW** (mean NLL **2.8868** / PPL **17.94**), delivering an **~10% relative reduction in held-out perplexity** (16.22 vs 17.94) for a negligible throughput cost (<1.4% overhead from Newton-Schulz iterations).
 
 ---
 
