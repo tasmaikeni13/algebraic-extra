@@ -14,7 +14,9 @@ def logprob_from_logits(logits, targets, head: str = "alg_ce", n: int = 8, c: fl
     """Per-token ``log p(target)``; logits (N, V), targets (N,)."""
     z = jnp.asarray(logits)
     z = z.astype(jnp.promote_types(z.dtype, F32))
-    if head == "alg_ce":
+    if head == "ce":
+        a = z
+    elif head == "alg_ce":
         a = n * jnp.arcsinh(z / c)
     else:
         raise ValueError(f"unknown head {head!r}")

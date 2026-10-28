@@ -1,5 +1,8 @@
-"""Pallas TPU fused vocabulary projection and algebraic likelihood loss.
+"""Pallas TPU fused vocabulary projection and likelihood loss.
 
+Both training heads share one kernel structure:
+
+* ``ce``: softmax cross-entropy. Per-token statistic ``lse = m + log l``.
 * ``alg_ce``: algebraic likelihood ``p_j ~ rho(z_j / c)^n``. The logit
   gradient of ``-log p_t`` is ``(n/c) (1 + (z_j/c)^2)^(-1/2) (p_j - y_j)``,
   which is algebraic, so the head trains on exact maximum likelihood without
@@ -83,12 +86,21 @@ def _fwd_kernel(h_ref, e_ref, t_ref, stat_ref, zt_ref, m_sc, l_sc, zt_sc, *,
         tgt = jnp.expand_dims(t_ref[0, 0], -1)
         zt_sc[...] += jnp.sum(jnp.where(col == tgt, z, 0.0), axis=1, keepdims=True)
         valid = col < vocab if last else None
-        x = jnp.minimum(z * inv_c, clamp)
-        rad = 1.0 + x * x
-        w = _ipow(x + rad * lax.rsqrt(rad), n)
-        if last:
-            w = jnp.where(valid, w, 0.0)
-        l_sc[...] += jnp.sum(w, axis=1, keepdims=True)
+        if kind == "ce":
+            if last:
+                z = jnp.where(valid, z, NEG)
+            m_prev = m_sc[...]
+            m_new = jnp.maximum(m_prev, jnp.max(z, axis=1, keepdims=True))
+            p = jnp.exp(z - m_new[:, :1])
+            l_sc[...] = jnp.exp(m_prev - m_new) * l_sc[...] + jnp.sum(p, axis=1, keepdims=True)
+            m_sc[...] = m_new
+        else:
+            x = jnp.minimum(z * inv_c, clamp)
+            rad = 1.0 + x * x
+            w = _ipow(x + rad * lax.rsqrt(rad), n)
+            if last:
+                w = jnp.where(valid, w, 0.0)
+            l_sc[...] += jnp.sum(w, axis=1, keepdims=True)
         del bn
 
     @pl.when(iv < nv - 1)
@@ -98,7 +110,10 @@ def _fwd_kernel(h_ref, e_ref, t_ref, stat_ref, zt_ref, m_sc, l_sc, zt_sc, *,
     @pl.when(iv == nv - 1)
     def _last():
         step(True)
-        stat_ref[...] = _inv_root(l_sc[...], n)
+        if kind == "ce":
+            stat_ref[...] = m_sc[...] + jnp.log(l_sc[...])
+        else:
+            stat_ref[...] = _inv_root(l_sc[...], n)
         zt_ref[...] = zt_sc[...]
 
 
@@ -117,11 +132,14 @@ def _bwd_kernel(scale_ref, h_ref, e_ref, t_ref, stat_ref, dz_ref, dh_ref, dh_sc,
         tgt = jnp.expand_dims(t_ref[0, 0], -1)
         stat = jnp.expand_dims(stat_ref[0, 0], -1)
         y = (col == tgt).astype(F32)
-        x = jnp.minimum(z * inv_c, clamp)
-        rad = 1.0 + x * x
-        r = lax.rsqrt(rad)
-        p = _ipow((x + rad * r) * stat, n)
-        dz = (p - y) * r
+        if kind == "ce":
+            dz = jnp.exp(z - stat) - y
+        else:
+            x = jnp.minimum(z * inv_c, clamp)
+            rad = 1.0 + x * x
+            r = lax.rsqrt(rad)
+            p = _ipow((x + rad * r) * stat, n)
+            dz = (p - y) * r
         if last:
             dz = jnp.where(col < vocab, dz, 0.0)
         dzb = (dz * scale_ref[0]).astype(dz_ref.dtype)
@@ -199,7 +217,10 @@ def _backward(h, embed, targets, stat, scale, *, kind, n, c, clamp, block_n, blo
 
 
 def _telemetry(stat, zt, kind, n, c, clamp):
-    """(per-token target probability, objective value)."""
+    """(per-token NLL or target probability, objective value)."""
+    if kind == "ce":
+        nll = stat - zt
+        return nll, jnp.mean(nll)
     x = jnp.minimum(zt / c, clamp)
     rad = 1.0 + x * x
     t = jnp.abs(x) + rad * lax.rsqrt(rad)
@@ -226,7 +247,7 @@ def _head_fwd(h, embed, targets, kind, n, c, clamp, block_n, block_v):
 def _head_bwd(kind, n, c, clamp, block_n, block_v, res, g):
     h, embed, targets, stat = res
     g_obj = g[0]
-    slope = n / c
+    slope = 1.0 if kind == "ce" else n / c
     scale = jnp.reshape(g_obj * (slope / h.shape[0]), (1,)).astype(F32)
     dh, de = _backward(h, embed, targets, stat, scale, kind=kind, n=n, c=c, clamp=clamp,
                        block_n=block_n, block_v=block_v)
@@ -236,17 +257,19 @@ def _head_bwd(kind, n, c, clamp, block_n, block_v, res, g):
 _head.defvjp(_head_fwd, _head_bwd)
 
 
-def fused_head(h, embed, targets, *, kind="alg_ce", n=8, c=2.0, block_n=128, block_v=512):
-    """Fused tied-embedding projection and algebraic likelihood objective.
+def fused_head(h, embed, targets, *, kind="ce", n=16, c=16.0, block_n=128, block_v=512):
+    """Fused tied-embedding projection and likelihood objective.
 
     ``h`` (N, d) hidden states, ``embed`` (V, d), ``targets`` (N,). Returns
-    ``(objective, telemetry)``: an algebraic stand-in objective whose gradient
-    is the exact log-likelihood gradient, and the per-token target probability.
+    ``(objective, telemetry)`` as in ``algebraic.model.head_loss``: for "ce"
+    the mean cross-entropy and per-token NLL; for "alg_ce" an algebraic
+    stand-in objective whose gradient is the exact log-likelihood gradient,
+    and the per-token target probability.
     """
-    if kind != "alg_ce":
-        raise ValueError(f"unknown head kind {kind!r}; only 'alg_ce' is supported")
-    if n & (n - 1):
+    if kind not in ("ce", "alg_ce"):
+        raise ValueError(kind)
+    if kind == "alg_ce" and (n & (n - 1)):
         raise ValueError("n must be a power of two")
-    clamp = 0.25 * _root(1e38 / embed.shape[0], n)
+    clamp = 0.25 * _root(1e38 / embed.shape[0], n) if kind == "alg_ce" else 0.0
     obj, tel = _head(h, embed, targets, kind, int(n), float(c), float(clamp), block_n, block_v)
     return obj, lax.stop_gradient(tel)

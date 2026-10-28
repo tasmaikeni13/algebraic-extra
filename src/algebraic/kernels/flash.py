@@ -1,5 +1,11 @@
-"""Pallas TPU flash attention for asinh-power kernels.
+"""Pallas TPU flash attention for softmax and asinh-power kernels.
 
+One tiled implementation serves both arms; they differ only in the weight
+function applied to a score tile and in the per-row statistic saved for the
+backward pass.
+
+* softmax: weight ``exp(s - m)``; saved statistic ``L = m + log l``;
+  backward weight ``exp(s - L)``.
 * asinh:   kernel-unit score ``x = q.k / (sqrt(d) c)`` and weight
   ``rho(x)^n``. Two accumulation strategies:
   - ``shift=True``: running maximum ``m`` with weights ``(rho(x) rho(-m))^n``
@@ -51,7 +57,7 @@ VMEM_LIMIT = 100 * 2 ** 20  # compiler arena limit; physical VMEM remains device
 
 
 class Variant(NamedTuple):
-    kind: str = "asinh"
+    kind: str          # "softmax" | "asinh"
     n: int = 16
     shift: bool = True
     fast_rho: bool = False
@@ -186,7 +192,7 @@ def _fwd_kernel(sink_ref, q_ref, k_ref, v_ref, o_ref, stat_ref, m_sc, l_sc, acc_
     i = pl.program_id(2)
     j = pl.program_id(3)
     j_last = _last_kblock(i, bq, bk, nk)
-    asinh_noshift = not var.shift
+    asinh_noshift = var.kind == "asinh" and not var.shift
 
     @pl.when(j == 0)
     def _init():
@@ -237,10 +243,14 @@ def _fwd_kernel(sink_ref, q_ref, k_ref, v_ref, o_ref, stat_ref, m_sc, l_sc, acc_
             # The old state is zero, so any finite rescale is equivalent.
             # Use the new maximum to prevent inf * 0 in that rescale.
             m_prev = jnp.where(j == 0, m_new, m_prev)
-        shift = _rho_exact(-m_new)[0]
-        safe_scores = jnp.where(mask, s, 0.0) if masked else s
-        p = _ipow(_rho(safe_scores, var.fast_rho)[0] * _bcast(shift, bk), var.n)
-        alpha = _ipow(_rho_exact(m_prev)[0] * shift, var.n)
+        if var.kind == "softmax":
+            p = jnp.exp(max_scores - _bcast(m_new, bk))
+            alpha = jnp.exp(m_prev - m_new)
+        else:
+            shift = _rho_exact(-m_new)[0]
+            safe_scores = jnp.where(mask, s, 0.0) if masked else s
+            p = _ipow(_rho(safe_scores, var.fast_rho)[0] * _bcast(shift, bk), var.n)
+            alpha = _ipow(_rho_exact(m_prev)[0] * shift, var.n)
         if masked:
             p = jnp.where(mask, p, 0.0)
         l_sc[...] = alpha * l_sc[...] + jnp.sum(p, axis=1, keepdims=True)
@@ -262,7 +272,9 @@ def _fwd_kernel(sink_ref, q_ref, k_ref, v_ref, o_ref, stat_ref, m_sc, l_sc, acc_
     def _fin():
         l = l_sc[...]
         o_ref[0, 0] = (acc_sc[...] * _bcast(1.0 / l, head_dim)).astype(o_ref.dtype)
-        if asinh_noshift:
+        if var.kind == "softmax":
+            stat = m_sc[...] + jnp.log(l)
+        elif asinh_noshift:
             stat = 1.0 / l if var.inv_stat else _inv_root(l, var.n)
         else:
             stat = _rho_exact(-m_sc[...])[0] * _inv_root(l, var.n)
@@ -273,10 +285,8 @@ def _fwd_kernel(sink_ref, q_ref, k_ref, v_ref, o_ref, stat_ref, m_sc, l_sc, acc_
 
 
 def _params():
-    return pltpu.CompilerParams(
-        dimension_semantics=("parallel", "parallel", "parallel", "arbitrary"),
-        vmem_limit_bytes=VMEM_LIMIT,
-    )
+    return pltpu.CompilerParams(dimension_semantics=("parallel", "parallel", "parallel", "arbitrary"),
+                                vmem_limit_bytes=VMEM_LIMIT)
 
 
 def _forward(q, k, v, sink, *, var, bq, bk, has_sink):
@@ -303,19 +313,14 @@ def _forward(q, k, v, sink, *, var, bq, bk, has_sink):
             ],
             out_specs=[
                 pl.BlockSpec((1, 1, bq, D), lambda b, h, i, j, *_: (b, h, i, 0)),
-                (
-                    pl.BlockSpec((1, 1, 1, bq), lambda b, h, i, j, *_: (b, h, 0, i))
-                    if var.compact_stat
-                    else pl.BlockSpec((1, 1, bq, LANES), lambda b, h, i, j, *_: (b, h, i, 0))
-                ),
+                (pl.BlockSpec((1, 1, 1, bq), lambda b, h, i, j, *_: (b, h, 0, i)) if var.compact_stat else
+                 pl.BlockSpec((1, 1, bq, LANES), lambda b, h, i, j, *_: (b, h, i, 0))),
             ],
             scratch_shapes=[pltpu.VMEM((bq, LANES), F32), pltpu.VMEM((bq, LANES), F32),
                             pltpu.VMEM((bq, D), F32)],
         ),
-        out_shape=[
-            jax.ShapeDtypeStruct(q.shape, F32 if var.precise_output else q.dtype),
-            jax.ShapeDtypeStruct((B, H, 1, T) if var.compact_stat else (B, H, T, LANES), F32),
-        ],
+        out_shape=[jax.ShapeDtypeStruct(q.shape, F32 if var.precise_output else q.dtype),
+                   jax.ShapeDtypeStruct((B, H, 1, T) if var.compact_stat else (B, H, T, LANES), F32)],
         compiler_params=_params(),
     )(sink, q, k, v)
     return o, stat[:, :, 0, :] if var.compact_stat else stat[..., 0]
@@ -333,12 +338,16 @@ def _tile_grads(q, k, v, do, stat, di, i, j, *, var, bq, bk, masked):
     """
     s = lax.dot_general(q, k, TRANS_B, preferred_element_type=F32)
     mask = _causal_mask(i, j, bq, bk) if masked else None
-    if not var.shift:
-        x = s if var.bounded_scores else jnp.minimum(s, var.clamp)
+    if var.kind == "softmax":
+        p = jnp.exp(s - stat)
+        r = None
     else:
-        x = jnp.where(mask, s, 0.0) if masked else s
-    rho, r = _variant_rho(x, var)
-    p = _ipow(rho, var.n) * stat if var.inv_stat else _ipow(rho * stat, var.n)
+        if not var.shift:
+            x = s if var.bounded_scores else jnp.minimum(s, var.clamp)
+        else:
+            x = jnp.where(mask, s, 0.0) if masked else s
+        rho, r = _variant_rho(x, var)
+        p = _ipow(rho, var.n) * stat if var.inv_stat else _ipow(rho * stat, var.n)
     if masked:
         p = jnp.where(mask, p, 0.0)
     dp = lax.dot_general(do, v, TRANS_B, preferred_element_type=F32)
@@ -418,7 +427,7 @@ def _dkv_kernel(sink_ref, q_ref, k_ref, v_ref, do_ref, stat_ref, di_ref, dk_ref,
 
     @pl.when(i == nq - 1)
     def _fin():
-        slope = float(var.n)
+        slope = 1.0 if var.kind == "softmax" else float(var.n)
         dk_ref[0, 0] = (dk_sc[...] * slope).astype(dk_ref.dtype)
         dv_ref[0, 0] = dv_sc[...].astype(dv_ref.dtype)
 
@@ -429,7 +438,7 @@ def _fused_bwd_kernel(sink_ref, q_ref, k_ref, v_ref, do_ref, stat_ref, di_ref,
     j = pl.program_id(2)
     i = pl.program_id(3)
     i_first = lax.div(j * bk, jnp.int32(bq))
-    slope = float(var.n)
+    slope = 1.0 if var.kind == "softmax" else float(var.n)
 
     @pl.when(i == 0)
     def _init():
@@ -499,7 +508,7 @@ def _dq_kernel(sink_ref, q_ref, k_ref, v_ref, do_ref, stat_ref, di_ref, dq_ref, 
 
     @pl.when(j == j_last)
     def _fin():
-        slope = float(var.n)
+        slope = 1.0 if var.kind == "softmax" else float(var.n)
         dq_ref[0, 0] = (dq_sc[...] * slope).astype(dq_ref.dtype)
 
 
@@ -579,7 +588,7 @@ def _resident_bwd_kernel(sink_ref, q_ref, k_ref, v_ref, do_ref, stat_ref, di_ref
         return unused
 
     lax.fori_loop(0, _last_kblock(i, bq, bk, nk) + 1, chunk_body, None)
-    slope = float(var.n)
+    slope = 1.0 if var.kind == "softmax" else float(var.n)
     dq_ref[0, 0] = (dq_sc[...] * slope).astype(dq_ref.dtype)
 
     @pl.when(i == nq - 1)
@@ -684,6 +693,8 @@ def _backward(q, k, v, sink, o, stat, do, *, var, bq, bk, fused=True):
 
 def _sink_mass_and_slope(sink, stat, var):
     """Per-row sink probability (B, H, T) and d(kernel logit)/d(sink)."""
+    if var.kind == "softmax":
+        return jnp.exp(sink[None, :, None] - stat), 1.0
     b = jnp.minimum(sink, var.clamp) if not var.shift and not var.bounded_scores else sink
     rho, r = bounded_radical(b) if var.poly_rho else _rho_exact(b)
     mass = (_ipow(rho[None, :, None], var.n) * stat if var.inv_stat else
@@ -718,10 +729,12 @@ def _flash_bwd(var, bq, bk, has_sink, res, do):
 _flash.defvjp(_flash_fwd, _flash_bwd)
 
 
-def make_variant(kind: str = "asinh", n: int = 16, c: float = 16.0, seq_len: int = 2048,
+def make_variant(kind: str, n: int = 16, c: float = 16.0, seq_len: int = 2048,
                  shift: Optional[bool] = None, fast_rho: Optional[bool] = None,
                  inv_stat: Optional[bool] = None, compact_stat: bool = True,
                  poly_rho: bool = False) -> Variant:
+    if kind == "softmax":
+        return Variant("softmax", compact_stat=bool(compact_stat))
     if kind != "asinh":
         raise ValueError(f"unknown attention kernel: {kind}")
     if n < 2 or n & (n - 1):
@@ -729,8 +742,8 @@ def make_variant(kind: str = "asinh", n: int = 16, c: float = 16.0, seq_len: int
     if not math.isfinite(c) or c <= 0:
         raise ValueError("asinh scale c must be positive and finite")
     # Invert rho exactly to bound the denominator for every supported n:
-    # rho((t - 1/t)/2) = t, (T+1)t^n = 1e37. Exact bound for numerical stability.
-    # Numerators need a separate value bound.
+    # rho((t - 1/t)/2) = t, (T+1)t^n = 1e37. The previous 0.25*t
+    # heuristic was unsafe for large n. Numerators need a separate value bound.
     t = _root(1e37 / (seq_len + 1), n)
     clamp = 0.5 * (t - 1.0 / t)
     if shift is None:
@@ -747,7 +760,7 @@ def make_variant(kind: str = "asinh", n: int = 16, c: float = 16.0, seq_len: int
                    bool(inv_stat), bool(compact_stat), bool(poly_rho))
 
 
-def flash_attention(q, k, v, sink_logit: Optional[jax.Array] = None, *, kind: str = "asinh",
+def flash_attention(q, k, v, sink_logit: Optional[jax.Array] = None, *, kind: str = "softmax",
                     n: int = 16, c: float = 16.0, block: int = 512,
                     block_q: Optional[int] = None, block_k: Optional[int] = None,
                     shift: Optional[bool] = None, fast_rho: Optional[bool] = None,
@@ -767,16 +780,16 @@ def flash_attention(q, k, v, sink_logit: Optional[jax.Array] = None, *, kind: st
     bfloat16 inputs at T=2048,D=64 and 512-square forward tiles. Explicit True
     also supports T=512/1024; False retains per-key-block dQ partials.
     ``diagonal_bwd=None`` skips upper-diagonal 128-square subtiles for the
-    measured T=2048 algebraic resident backward.
+    measured T=2048 algebraic resident backward. Explicit True also allows
+    the supported smaller resident contexts and a matching softmax control.
     ``diagonal_fwd=None`` selects the corresponding unshifted forward
     decomposition at T=2048 with bfloat16 and 512-square tiles. The shifted
-    fallback retains its original schedule.
+    fallback retains its original schedule. False permits a measured control.
     ``head_resident=None`` selects whole-head residency for the guarded
     algebraic model shape when no diagonal schedule is explicitly specified.
-    False retains query-streamed resident accumulation.
+    False retains query-streamed resident accumulation. Explicit True also
+    permits a softmax benchmark control at the same shape.
     """
-    if kind != "asinh":
-        raise ValueError(f"unknown attention kind {kind!r}; only 'asinh' is supported")
     B, H, T, D = q.shape
     bq = min(block_q or block, T)
     bk = min(block_k or block, T)
@@ -785,29 +798,29 @@ def flash_attention(q, k, v, sink_logit: Optional[jax.Array] = None, *, kind: st
     var = make_variant(kind, n, c, T, shift, fast_rho, inv_stat, compact_stat, poly_rho)
     resident_supported = (T in (512, 1024, 2048) and D == 64 and
                           q.dtype == k.dtype == v.dtype == jnp.bfloat16 and not poly_rho and
-                          n == 16)
+                          (kind == "softmax" or n == 16))
     if resident_bwd is True and not resident_supported:
         raise ValueError("resident backward needs bfloat16, T=512/1024/2048, D=64, "
-                         "and exact asinh n=16")
+                         "and softmax or exact asinh n=16")
     use_resident = (resident_supported and T == 2048 and bq == bk == 512 and compact_stat
                     if resident_bwd is None else bool(resident_bwd))
     if diagonal_bwd is True and not use_resident:
         raise ValueError("diagonal backward requires the resident backward backend")
-    use_diagonal = (use_resident and T == 2048
+    use_diagonal = (use_resident and kind == "asinh" and T == 2048
                     if diagonal_bwd is None else bool(diagonal_bwd))
-    use_diagonal_fwd = (resident_supported and T == 2048
+    use_diagonal_fwd = (resident_supported and kind == "asinh" and T == 2048
                         and bq == bk == 512 and not poly_rho
                         if diagonal_fwd is None else bool(diagonal_fwd))
     head_supported = (use_resident and T == 2048 and bq == bk == 512 and compact_stat)
     if head_resident is True and not head_supported:
         raise ValueError("whole-head residency needs resident bfloat16 T=2048,D=64, "
                          "512-square public tiles, and compact statistics")
-    use_head = (head_supported and range_guard
+    use_head = (head_supported and kind == "asinh" and range_guard
                 and diagonal_bwd is None and diagonal_fwd is None
                 if head_resident is None else bool(head_resident))
     var = var._replace(resident_bwd=use_resident, diagonal_bwd=use_diagonal,
                        diagonal_fwd=use_diagonal_fwd, head_resident=use_head)
-    unit = float(c)
+    unit = 1.0 if kind == "softmax" else float(c)
     scale = 1.0 / (math.sqrt(D) * unit)
     has_sink = sink_logit is not None
     if has_sink:
@@ -818,7 +831,7 @@ def flash_attention(q, k, v, sink_logit: Optional[jax.Array] = None, *, kind: st
     # Fold the score scale into q (exact for power-of-two scales); autodiff
     # applies the matching factor to dq outside the kernels.
     q_scaled = (q.astype(F32) * scale).astype(q.dtype)
-    if range_guard and n <= 32:
+    if range_guard and kind == "asinh" and n <= 32:
         if poly_rho:
             raise ValueError("range_guard is for exact radical evaluation")
         # Bounds the absolute dot product, including wholly negative rows.

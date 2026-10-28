@@ -1,9 +1,10 @@
-"""Configurable pre-norm causal Algebraic Transformer language model.
+"""Configurable pre-norm causal Transformer language model.
 
-``LMConfig`` specifies the Algebraic Transformer architecture;
-``src/algebraic/config.py`` defines model scale presets. Parameters are stacked
-over layers and the blocks run under ``lax.scan``. This file performs no
-transcendental calls.
+``LMConfig`` selects each component independently; ``src/algebraic/config.py``
+names the compared architectures. Parameters are stacked over layers and the
+blocks run under ``lax.scan``. This file performs no transcendental calls:
+standard components come from ``standard.py`` and algebraic ones from
+``algebraic.py``.
 """
 
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from jax import lax
 import jax.numpy as jnp
 
 from algebraic import algebraic as A
+from algebraic import standard as S
 
 F32 = jnp.float32
 
@@ -30,25 +32,25 @@ class LMConfig:
     # normalization: "rms" (learned gain) or "avn" (parameter free)
     norm: str = "rms"
     eps: float = 1e-5
-    # feed-forward: "alu_glu"
-    ffn: str = "alu_glu"
-    alu_beta: float = 0.5
-    # positions: "cayley_geo", "none"
-    pos: str = "cayley_geo"
+    # feed-forward: "swiglu" or "alu_glu"
+    ffn: str = "swiglu"
+    alu_beta: float = 1.0
+    # positions: "rope", "cayley_geo", "none"
+    pos: str = "rope"
     rope_base: float = 10000.0
     rope_fraction: float = 1.0
-    # attention: "asinh" (rho(s/c)^n)
-    attn: str = "asinh"
-    attn_n: int = 16
-    attn_c: float = 8.0
+    # attention: "softmax" or "asinh" (rho(s/c)^n)
+    attn: str = "softmax"
+    attn_n: int = 8
+    attn_c: float = 1.0
     # sink: "none", "const" (fixed logit sink_init) or "learned" (per head)
-    sink: str = "learned"
+    sink: str = "none"
     sink_init: float = 0.0
-    qk_norm: bool = True
-    # training head: "alg_ce"
-    head: str = "alg_ce"
-    head_n: int = 8
-    head_c: float = 2.0
+    qk_norm: bool = False
+    # training head: "ce" or "alg_ce"
+    head: str = "ce"
+    head_n: int = 16
+    head_c: float = 16.0
     # parameters and execution
     init_std: float = 0.02
     out_init_scale: float = 1.0  # multiplies the init std of w_o and w_d
@@ -125,6 +127,8 @@ def decay_mask(params) -> Any:
 
 def position_tables(cfg: LMConfig, seq_len: Optional[int] = None):
     T = seq_len or cfg.seq_len
+    if cfg.pos == "rope":
+        return S.rope_table(cfg.head_dim, T, cfg.rope_base)
     if cfg.pos == "cayley_geo":
         return A.cayley_table_geometric(cfg.head_dim, T, cfg.rope_base,
                                         fraction=cfg.rope_fraction)
@@ -142,8 +146,10 @@ def _attention(q, k, v, sink_logit, cfg: LMConfig):
     if cfg.attn_impl == "flash":
         from algebraic.kernels.flash import flash_attention
         return flash_attention(q, k, v, sink_logit, kind=cfg.attn, n=cfg.attn_n,
-                                c=cfg.attn_c, block=cfg.flash_block,
-                                range_guard=cfg.attn == "asinh")
+                               c=cfg.attn_c, block=cfg.flash_block,
+                               range_guard=cfg.attn == "asinh")
+    if cfg.attn == "softmax":
+        return S.softmax_attention(q, k, v, sink_logit=sink_logit)
     if cfg.attn == "asinh":
         return A.asinh_attention(q, k, v, n=cfg.attn_n, c=cfg.attn_c, sink_logit=sink_logit)
     raise ValueError(f"unknown attention {cfg.attn!r}")
@@ -178,7 +184,9 @@ def _block(cfg: LMConfig, cos, sin, x, lp):
     h2 = _norm(x, lp.get("ln2"), cfg)
     gate = h2 @ lp["w_g"].astype(dt)
     up = h2 @ lp["w_u"].astype(dt)
-    if cfg.ffn == "alu_glu":
+    if cfg.ffn == "swiglu":
+        act = S.silu(up)
+    elif cfg.ffn == "alu_glu":
         act = A.alu(up, cfg.alu_beta)
     else:
         raise ValueError(f"unknown ffn {cfg.ffn!r}")
@@ -203,18 +211,20 @@ def forward_hidden(params, tokens: jax.Array, cfg: LMConfig, tables) -> jax.Arra
 def head_loss(params, hidden: jax.Array, targets: jax.Array, cfg: LMConfig):
     """Training objective for one micro-batch.
 
-    Returns ``(objective, telemetry)``: for the algebraic head, telemetry is
-    the per-token target probability (stop-gradient), converted to NLL by the
-    trainer outside the model.
+    Returns ``(objective, telemetry)``: for the "ce" head the telemetry is the
+    per-token NLL; for algebraic heads it is the per-token target probability
+    (stop-gradient), converted to NLL by the trainer outside the model.
     """
     N = hidden.shape[0] * hidden.shape[1]
     h = hidden.reshape(N, -1)
     tgt = targets.reshape(N)
-    if cfg.head_impl == "fused" and cfg.head == "alg_ce":
+    if cfg.head_impl == "fused" and cfg.head in ("ce", "alg_ce"):
         from algebraic.kernels.fused_head import fused_head
         return fused_head(h, params["embed"], tgt, kind=cfg.head, n=cfg.head_n, c=cfg.head_c,
                           block_n=cfg.head_block_n, block_v=cfg.head_block_v)
     logits = jnp.matmul(h, params["embed"].astype(h.dtype).T, preferred_element_type=F32)
+    if cfg.head == "ce":
+        return S.cross_entropy(logits, tgt)
     if cfg.head == "alg_ce":
         obj, pt = A.algebraic_likelihood_lean(logits, tgt, cfg.head_n, cfg.head_c)
         return obj, lax.stop_gradient(pt)
@@ -222,7 +232,7 @@ def head_loss(params, hidden: jax.Array, targets: jax.Array, cfg: LMConfig):
 
 
 def telemetry_is_probability(cfg: LMConfig) -> bool:
-    return cfg.head == "alg_ce"
+    return cfg.head != "ce"
 
 
 def eval_logprobs(params, tokens, targets, cfg: LMConfig, tables) -> jax.Array:
