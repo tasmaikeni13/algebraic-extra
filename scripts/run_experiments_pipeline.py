@@ -262,7 +262,8 @@ def make_sweep_jobs(
         tokens_budget = 600_000_000
         micro = 4
         eval_every = 100
-        train_file = str(DATA_DIR / "fineweb_train_2_5B.npy")
+        sweep_cand = DATA_DIR / "fineweb_sweep_600M.npy"
+        train_file = str(sweep_cand if sweep_cand.is_file() else DATA_DIR / "fineweb_train_2_5B.npy")
     elif scale == "350m":
         tokens_budget = 2_000_000_000
         micro = 2

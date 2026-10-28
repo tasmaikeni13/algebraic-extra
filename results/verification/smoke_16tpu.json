@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "completed_steps": 1,
+  "scale": "125m",
+  "optimizer": "muon_adamw",
+  "devices": 16,
+  "processes": 4,
+  "hosts": [
+    "w0",
+    "w1",
+    "w2",
+    "w3"
+  ],
+  "loss": 20.778453826904297,
+  "grad_norm": 0.4204069972038269,
+  "runs": {
+    "125m_muon_adamw": {
+      "passed": true,
+      "scale": "125m",
+      "optimizer": "muon_adamw",
+      "completed_steps": 1,
+      "devices": 16,
+      "processes": 4,
+      "loss": 20.778453826904297,
+      "grad_norm": 0.4204069972038269,
+      "final_eval_nll": 20.427936553955078,
+      "parameters": 110122128,
+      "elapsed_s": 53.56269988196436
+    }
+  }
+}

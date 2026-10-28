@@ -17,7 +17,6 @@ ENV/
 *.npz
 
 # Results and runs
-results/
 runs/
 
 # System files
