@@ -79,8 +79,8 @@ def prepare_and_sync_7b_data() -> None:
     train_7b = DATA_DIR / "fineweb_train_7B.npy"
     valid_path = DATA_DIR / "fineweb_valid.npy"
 
-    expected_train_bytes = 7_000_000_000 * 2
-    expected_valid_bytes = 10_000_000 * 2
+    expected_train_bytes = 7_000_000_000 * 2 + 128
+    expected_valid_bytes = 10_000_000 * 2 + 128
 
     # Check if already complete on w0
     if train_7b.is_file() and train_7b.stat().st_size == expected_train_bytes and \
@@ -102,7 +102,7 @@ def prepare_and_sync_7b_data() -> None:
         subprocess.run(cmd, cwd=str(ROOT), check=True)
 
         if not train_7b.is_file() or train_7b.stat().st_size != expected_train_bytes:
-            raise RuntimeError(f"7B train dataset incomplete: {train_7b}")
+            raise RuntimeError(f"7B train dataset incomplete: {train_7b} ({train_7b.stat().st_size if train_7b.is_file() else 0} bytes vs expected {expected_train_bytes})")
         if not valid_path.is_file() or valid_path.stat().st_size != expected_valid_bytes:
             raise RuntimeError(f"10M valid dataset incomplete: {valid_path}")
         print(f"[{ist_now_str()}] [DATA PREP] Tokenization completed successfully on w0!", flush=True)
