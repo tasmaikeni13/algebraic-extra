@@ -11,15 +11,17 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
 import time
 
 import numpy as np
 import pyarrow.parquet as pq
 import requests
 
-from algebraic.tokenizer import get_tokenizer
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from algebraic.tokenizer import get_tokenizer
 DATASET = "HuggingFaceFW/fineweb-edu"
 EOT = 2
 
