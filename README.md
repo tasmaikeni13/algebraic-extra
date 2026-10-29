@@ -1,186 +1,173 @@
-# algebraic-extra
+# Algebraic Transformer (`algebraic-extra`)
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
-[![TPU v4](https://img.shields.io/badge/Hardware-Cloud%20TPU%20v4--32-orange.svg)](https://cloud.google.com/tpu)
+[![Hardware: Cloud TPU v4-32](https://img.shields.io/badge/Hardware-Cloud%20TPU%20v4--32-orange.svg)](https://cloud.google.com/tpu)
+[![Framework: JAX / Pallas](https://img.shields.io/badge/Framework-JAX%20%7C%20Pallas-blue.svg)](https://github.com/google/jax)
 
-Standalone research-grade repository for **125M** and **350M** Algebraic Transformers, featuring frozen 32k LLaMA-style tokenization and three standalone, pure XLA optimizers:
-- **Classic Muon + AdamW**: Newton-Schulz matrix polar updates for 2D hidden weights; AdamW for 1D vectors and gains.
-- **Pure C-AdamW**: Cautious coordinate update masking based on alignment with first-order gradient direction.
-- **Hybrid Muon + C-AdamW**: Structural parameter routing combining Muon for 2D representations and C-AdamW for 1D vectors.
-
-Can you train a competitive Transformer without a single transcendental function?
-
-In standard language models, non-linearities rely heavily on transcendental operations: attention uses `exp` in softmax, rotary embeddings evaluate `sin` and `cos`, feed-forward blocks use `GELU` or `SiLU` (`sigmoid`), and the output head computes log-sum-exp cross-entropy. 
-
-The **Algebraic Transformer** replaces all of them with purely algebraic operations—functions composed strictly of field arithmetic (+, -, *, /) and reciprocal square roots (`rsqrt`). Its exact log-loss gradient evaluates without logarithms, exponentials, or trigonometric primitives.
-
-To test whether this architecture holds up under real pretraining, I trained matched Standard and Pure Algebraic models from scratch on FineWeb-Edu across two scales on Cloud TPU v4-32 pods:
-* **125M parameters** (2.5B tokens, 5 seeds each, 10 runs total)
-* **350M parameters** (7.0B tokens, 3 seeds each, 32k LLaMA BPE tokenizer)
-
-Across both scales—spanning an order of magnitude in compute from 1.88e18 to 1.40e19 FLOPs—the algebraic model consistently achieves a lower cross-entropy loss by about **0.04 nats** (an invariant **~3.9% relative perplexity reduction**), while matching or outperforming the standard baseline on public zero-shot benchmarks and long-range needle recall.
+A standalone, research-grade implementation and empirical evaluation of the **Algebraic Transformer** against the modern **Standard LLaMA-style Transformer** at **125M** and **350M** active parameters, trained from scratch on [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) across Cloud TPU v4-32 pods (16 TPU chips across 4 host workers).
 
 ---
 
-## Architecture Comparison
+## The Core Question: Can Transformers Eliminate All Transcendentals?
 
-| Component | Standard Transformer | Pure Algebraic Transformer |
+In standard language models, non-linearities rely heavily on transcendental functions:
+* **Attention:** Softmax computes exponentiation ($\exp(s_i)$) and normalizes by an exponential sum ($\sum_j \exp(s_j)$).
+* **Positional Embeddings:** Rotary position embeddings (RoPE) evaluate trigonometric functions ($\sin$ and $\cos$).
+* **Feed-Forward Blocks:** SwiGLU / GeGLU evaluate transcendentals via $\text{SiLU}(x) = x \cdot \sigma(x) = x / (1 + e^{-x})$.
+* **Output Loss Head:** Cross-entropy evaluates log-sum-exp reductions requiring logarithms ($\ln$) and exponentials.
+
+The **Algebraic Transformer** replaces every transcendental operation with purely algebraic primitives—functions composed strictly of field arithmetic ($+$, $-$, $\times$, $/$) and reciprocal square roots (`rsqrt`). Crucially, its **exact log-loss gradient evaluates in closed form without a single logarithm, exponential, or trigonometric function**.
+
+---
+
+## Architectural Comparison
+
+| Component | Standard LLaMA-style Transformer | Pure Algebraic Transformer |
 |---|---|---|
-| **Attention Activation** | Softmax (`exp(QK^T / sqrt(d))`) | Algebraic asinh with power contraction (`rho(S/c)^n`) |
-| **Attention Sink** | None | Learned per-head sink parameter |
-| **Positional Encoding** | RoPE (`sin` / `cos` frequencies) | Rational Cayley geometric rotations |
-| **Feed-Forward Network** | SwiGLU (`x * SiLU(W_1 x)`) | ALU-GLU (`x * ALU(W_1 x)`, rational algebraic non-linearity) |
+| **Attention Activation** | Softmax ($\exp(QK^T / \sqrt{d})$) | Algebraic asinh power contraction ($\rho(S / c)^n$) |
+| **Attention Sink** | None | Learned per-head attention sink parameter |
+| **Positional Encoding** | Trigonometric RoPE ($\sin$ / $\cos$ frequencies) | Rational Cayley geometric rotations |
+| **Feed-Forward Network** | SwiGLU ($x \cdot \text{SiLU}(W_1 x)$) | ALU-GLU ($x \cdot \text{ALU}(W_1 x)$, rational algebraic root) |
 | **Normalization** | Learned RMS gains | Learned RMS gains + QK normalization |
-| **Output Distribution** | Softmax | Algebraic normalized power distribution (`rho(z/2)^8`) |
+| **Output Distribution** | Softmax | Algebraic normalized power distribution ($\rho(z / 2)^8$) |
 | **Objective Gradient** | Softmax Cross-Entropy | Exact algebraic log-loss gradient |
 
-Here `rho(x) = x + sqrt(1 + x^2)`. The token embedding and output projection matrices are tied.
-
-The algebraic claim strictly covers the **model objective and its gradient** during training. Parameter initialization, metric telemetry, and the shared learning-rate schedule run outside that boundary (the primitive audit is detailed in [`scripts/audit_algebraic.py`](scripts/audit_algebraic.py)).
-
----
-
-## Scaling Dynamics (125M vs 350M)
-
-Moving from 125M to 350M represents a 7.45x increase in training compute. Both architectures follow a standard power-law loss curve (`L(C) = E + A_C / C^gamma`), with the algebraic model maintaining an almost constant offset:
-
-| Scale | Active Params | Tokens | Compute (C) | Standard NLL | Algebraic NLL | ΔNLL | Relative PPL Drop |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **125M** | 123.6M | 2.5B | 1.88e18 FLOPs | 3.2001 ± 0.0037 | **3.1582 ± 0.0044** | **-0.0419 ± 0.0051** | **-3.99%** (24.53 -> 23.53) |
-| **350M** | 332.5M | 7.0B | 1.40e19 FLOPs | 2.5845 ± 0.0018 | **2.5450 ± 0.0019** | **-0.0395 ± 0.0026** | **-3.87%** (13.26 -> 12.74) |
-
-A few observations on this scaling behavior:
-1. **Invariant Information Gain**: The entropy reduction stays essentially fixed at `ΔNLL ≈ -0.040 nats` (`p < 1e-5`). 
-2. **Compute Equivalence (~1.15x)**: Because the scaling slopes are identical, matching the loss of an Algebraic Transformer requires training a Standard Transformer with roughly **15% to 16% more FLOPs**.
-3. **Parameter Equivalence (~1.22x)**: At equal token counts, a Standard Transformer requires about **20% to 22% more parameters** (~425M vs 350M) to reach the same held-out loss.
-4. **Why PPL Difference Shrinks While Percentage Stays Flat**: Because perplexity is exponential (`PPL = exp(NLL)`), `ΔPPL` naturally scales with baseline perplexity (`ΔPPL ≈ PPL * ΔNLL`). At 125M, baseline PPL is 24.5, so `ΔPPL = -1.00`. At 350M, baseline PPL drops to 13.3, so `ΔPPL = -0.52`. The relative advantage, however, is invariant at **~3.9%** across both scales (`PPL_alg / PPL_std = exp(ΔNLL) ≈ 0.961`).
+*Notation:* $\rho(x) = x + \sqrt{1 + x^2}$. The token embedding and output projection matrices are tied.  
+The algebraic claim strictly covers the **model objective and its gradient** during training (the formal primitive audit is detailed in [`scripts/audit_algebraic.py`](scripts/audit_algebraic.py)).
 
 ---
 
-## 350M Results (7.0B Tokens, 3 Seeds: 42, 43, 44)
+## Why Eliminate Transcendentals? (Hardware Architecture Perspective)
 
-The 350M runs used a 32k LLaMA-style BPE tokenizer on FineWeb-Edu, trained across 4 worker hosts on a TPU v4-32 slice (6,676 steps, batch size 512, sequence length 2,048). Prior to the main run, I ran a hyperparameter sweep across `{3e-4, 6e-4, 1.2e-3, 2.4e-3}` on 2.0B tokens per arm; `0.0012` was optimal for both models.
-
-### Language Modeling & Training Telemetry
-
-Values are mean ± sample SD across seeds 42, 43, and 44:
-
-| Metric | Standard 350M | Algebraic 350M | Paired Delta (Δ) | Notes |
-|---|---|---|---|---|
-| **Held-Out NLL (nats/token)** | 2.5845 ± 0.0018 | **2.5450 ± 0.0019** | **-0.0395 ± 0.0026** | Algebraic wins on every seed (`p < 1e-5`) |
-| **Held-Out Perplexity** | 13.26 ± 0.02 | **12.74 ± 0.02** | **-0.52 ± 0.03** | 3.87% relative reduction |
-| **Training Time per Run** | 11,950 ± 3 s | 13,270 ± 1 s | +11.0% | TPU Pallas kernel overhead |
-| **Step Throughput (tok/s)** | 586,277 ± 124 | 528,222 ± 32 | 90.1% of standard | Without hardware-level tuning |
-
-### Public Zero-Shot Benchmarks (Accuracy %)
-
-Evaluated on official validation/test splits:
-
-| Benchmark | Standard 350M | Algebraic 350M | Paired Delta (Δ pp) | Advantage |
-|---|---|---|---|:---:|
-| **BoolQ** | 58.36% ± 2.39 | **60.35% ± 1.40** | **+1.99 ± 3.73** | Algebraic |
-| **ARC-Easy** | 44.40% ± 1.31 | **45.74% ± 0.42** | **+1.33 ± 1.35** | Algebraic |
-| **LAMBADA** | 21.89% ± 0.66 | **23.16% ± 0.89** | **+1.27 ± 0.38** | Algebraic |
-| **HellaSwag** | 34.11% ± 0.16 | **35.05% ± 0.12** | **+0.94 ± 0.11** | Algebraic |
-| **PIQA** | 65.18% ± 0.09 | **65.71% ± 0.28** | **+0.53 ± 0.27** | Algebraic |
-| **ARC-Challenge** | 25.43% ± 0.52 | **25.80% ± 1.03** | **+0.37 ± 0.57** | Algebraic |
-| **OpenBookQA** | **30.33% ± 0.23** | 29.87% ± 1.01 | -0.47 ± 0.83 | Standard |
-| **WinoGrande** | **51.75% ± 0.48** | 51.17% ± 0.43 | -0.58 ± 0.78 | Standard |
-| **Macro Average** | 41.43% | **42.11%** | **+0.68 pp** | **Algebraic (+0.68 pp)** |
-
-### Long-Range Retrieval & Needle Recall
-
-Evaluated using synthetic key-value needles embedded at various depths within a 2,048-token context:
-
-| Task / Condition / Metric | Standard 350M | Algebraic 350M | Paired Delta (Δ pp) | Advantage |
-|---|---|---|---|:---:|
-| **Needle Passkey** (Present / Exact Retrieval) | 41.30% ± 27.58 | **45.36% ± 4.77** | **+4.06 ± 25.37** | Algebraic |
-| **Latest Value Update** (Present / Exact Retrieval) | 8.23% ± 2.19 | **10.57% ± 1.00** | **+2.34 ± 1.51** | Algebraic |
-| **Associative Recall** (Present / Exact Retrieval) | 2.45% ± 0.80 | **3.02% ± 0.72** | **+0.57 ± 1.42** | Algebraic |
-| **Multi-Needle** (Present / Exact Retrieval) | 0.00% ± 0.00 | **0.10% ± 0.09** | **+0.10 ± 0.09** | Algebraic |
-| **Absent-Evidence Controls** (Unsupported Hits) | 0.00% ± 0.00 | 0.00% ± 0.00 | 0.00 | No hallucination |
+In modern GPU and TPU silicon, transcendental functions cannot execute on dense matrix-multiply units (Tensor Cores / TPU Matrix Multiply Units [MXUs]). Instead, they are routed to **Special Function Units (SFUs)** that compute multi-cycle minimax/Chebyshev polynomial approximations or memory-mapped lookup tables:
+1. **SFU Bottlenecks:** SFUs have **8× to 16× lower instruction throughput** per clock cycle than dense tensor cores.
+2. **FlashAttention Thread Stalls:** In fused attention kernels, execution threads stall waiting on online softmax reduction barriers ($\exp(x - x_{\max})$).
+3. **Pure Algebraic ASICs:** By proving that models train stably and achieve superior perplexity without transcendentals, this architecture paves the way for specialized algebraic accelerators:
+   * **Die Area Reclamation:** Eliminating SFU silicon frees physical die area that can be dedicated to additional FP8/BF16 tensor cores or on-chip SRAM cache.
+   * **Autonomous On-Chip Training:** Forward passes, backward passes, loss heads, and optimizer updates (AdamW uses only arithmetic and `rsqrt`) run entirely algebraically, removing host CPU synchronization bottlenecks.
 
 ---
 
-## 125M Results (2.5B Tokens, 5 Seeds: 42–46)
+## 125M Empirical Results (5 Random Seeds per Optimizer, 30 Runs Total)
 
-Trained on 2.5B tokens of FineWeb-Edu across 5 independent seeds (`42, 43, 44, 45, 46`):
+Controlled comparison on FineWeb-Edu (2.5B tokens / 2,385 steps per run, batch size 512, sequence length 2,048 across 16 Cloud TPU v4 chips). Each optimizer was evaluated across **5 independent random seeds** (`42, 43, 44, 45, 46`):
 
-### Language Modeling Telemetry
+### 5-Seed Head-to-Head Comparison Table
 
-| Metric | Standard 125M | Algebraic 125M | Paired Delta (Δ) | Notes |
-|---|---|---|---|---|
-| **Held-Out NLL (nats/token)** | 3.2001 ± 0.0037 | **3.1582 ± 0.0044** | **-0.0419 ± 0.0051** | Algebraic wins across all 5 seeds (`p < 0.001`) |
-| **Held-Out Perplexity** | 24.53 ± 0.09 | **23.53 ± 0.10** | **-1.00 ± 0.12** | 3.99% relative reduction |
-| **Training Time per Run** | 1605.80 ± 0.55 s | 1735.65 ± 0.49 s | +8.0% | TPU runtime |
-| **Step Throughput (tok/s)** | 1,570,799 ± 423 | 1,455,789 ± 482 | 92.7% of standard | Pallas TPU kernel |
+| Architecture | Optimizer | Held-Out NLL (nats) | Held-Out Perplexity | Final Train Loss | Delta NLL vs. Standard | Relative PPL Reduction |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| **Standard LLaMA** | **Muon + AdamW** | 2.8130 ± 0.0015 | 16.66 ± 0.02 | 2.7688 | *baseline* | *baseline* |
+| **Algebraic Transformer** | **Muon + AdamW** | **2.7881 ± 0.0011** | **16.25 ± 0.02** | **2.7415** | **-0.0249** | **+2.46%** |
+| **Standard LLaMA** | **Cautious AdamW (C-AdamW)** | 2.9847 ± 0.0042 | 19.78 ± 0.08 | 2.9425 | *baseline* | *baseline* |
+| **Algebraic Transformer** | **Cautious AdamW (C-AdamW)** | **2.8868 ± 0.0035** | **17.94 ± 0.06** | **2.8423** | **-0.0979** | **+9.32%** |
+| **Standard LLaMA** | **Hybrid Muon + C-AdamW** | 2.8149 ± 0.0018 | 16.69 ± 0.03 | 2.7704 | *baseline* | *baseline* |
+| **Algebraic Transformer** | **Hybrid Muon + C-AdamW** | **2.7864 ± 0.0012** | **16.22 ± 0.02** | **2.7412** | **-0.0286** | **+2.81%** |
 
-### Zero-Shot Evaluation (125M)
+#### Overall 15-Run Grand Means:
+* **Algebraic Transformer Grand Mean:** Held-Out NLL **2.8204**, Perplexity **16.80**
+* **Standard LLaMA Grand Mean:** Held-Out NLL **2.8709**, Perplexity **17.71**
+* **Grand Delta:** **-0.0504 nats** (**+5.13% relative perplexity reduction** for Algebraic Transformer across all runs).
 
-| Benchmark | Standard 125M | Algebraic 125M | Paired Delta (Δ pp) | Advantage |
-|---|---|---|---|:---:|
-| **ARC-Challenge** | 24.10% ± 0.92 | **24.83% ± 0.74** | **+0.73 ± 0.64** | Algebraic |
-| **ARC-Easy** | 43.16% ± 0.59 | **43.48% ± 0.97** | **+0.32 ± 0.79** | Algebraic |
-| **HellaSwag** | 28.43% ± 0.09 | **28.87% ± 0.45** | **+0.44 ± 0.43** | Algebraic |
-| **WinoGrande** | 51.32% ± 0.68 | **52.19% ± 1.29** | **+0.87 ± 1.68** | Algebraic |
-| **BoolQ** | 60.33% ± 1.60 | **60.60% ± 1.83** | **+0.27 ± 1.16** | Algebraic |
-| **LAMBADA** | 17.15% ± 0.76 | **17.45% ± 0.65** | **+0.30 ± 1.17** | Algebraic |
-| **PIQA** | 61.75% ± 0.56 | **61.94% ± 0.38** | **+0.18 ± 0.81** | Algebraic |
-| **OpenBookQA** | **27.12% ± 1.71** | 27.08% ± 1.68 | -0.04 ± 2.15 | Neutral / Tie |
+### Context Scaling: Position-Wise NLL ($2^1$ to $2^{12}$ tokens)
+
+Evaluated at each power-of-2 context position on held-out FineWeb-Edu validation data:
+
+| Position | Algebraic (Hybrid) | Standard (Hybrid) | Delta (Hybrid) | Algebraic (C-AdamW) | Standard (C-AdamW) | Delta (C-AdamW) |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **2** | **5.4591** | 5.8524 | **-0.3933** | **5.5410** | 5.6234 | **-0.0823** |
+| **4** | **4.8496** | 4.9808 | **-0.1313** | **4.9115** | 5.0308 | **-0.1193** |
+| **8** | **4.4216** | 4.4744 | **-0.0528** | **4.4532** | 4.5552 | **-0.1020** |
+| **16** | **3.9516** | 3.9734 | **-0.0218** | **3.9924** | 4.0815 | **-0.0891** |
+| **32** | **3.5910** | 3.6052 | **-0.0143** | **3.6431** | 3.7391 | **-0.0960** |
+| **64** | **3.2729** | 3.2972 | **-0.0243** | **3.3542** | 3.4440 | **-0.0898** |
+| **128** | **3.0555** | 3.0786 | **-0.0231** | **3.1440** | 3.2352 | **-0.0912** |
+| **256** | **2.9151** | 2.9391 | **-0.0241** | **3.0093** | 3.1024 | **-0.0931** |
+| **512** | **2.8445** | 2.8702 | **-0.0257** | **2.9434** | 3.0376 | **-0.0942** |
+| **1024** | **2.7937** | 2.8202 | **-0.0265** | **2.8939** | 2.9902 | **-0.0963** |
+| **2048** | **2.7594** | 2.7877 | **-0.0283** | **2.8608** | 2.9587 | **-0.0979** |
+| **4096** | **2.7481** | 2.7778 | **-0.0297** | **2.8501** | 2.9495 | **-0.0994** |
 
 ---
 
-## Why Eliminate Transcendentals?
+## 350M Empirical Results & Scaling Dynamics
 
-In modern GPUs and TPUs, transcendental functions do not run on the primary matrix multiplication units. They execute on **Special Function Units (SFUs)** using multi-cycle polynomial approximations (Chebyshev/minimax) or lookup tables:
-* SFUs have **8x to 16x lower instruction throughput** per cycle than dense matrix-multiply units (Tensor Cores / MAC arrays).
-* In fused kernels like FlashAttention, thread execution stalls whenever computing online softmax reductions (`exp(x - max)`).
-* Transcendentals consume significantly more dynamic switching power per instruction than additions or multiplications.
+At 350M scale ($D_{\text{model}}=1024, L=24, H=16, D_{\text{head}}=64, D_{\text{ff}}=2688$, active parameters: `332,453,248` non-embedding weights), models were evaluated across extensive 10-arm hyperparameter grids on 600M tokens each (20 arms total):
 
-By demonstrating that language models train stably and reach lower loss without `exp`, `log`, or trigonometric functions, this architecture opens the door for **pure algebraic ASICs**:
-1. **Die Area Reallocation**: Removing SFU blocks frees up silicon that can be directly reassigned to more FP8/BF16 tensor cores or on-chip SRAM cache.
-2. **Autonomous On-Chip Training**: Because forward passes, backward passes, loss heads, and optimizer updates (AdamW uses only addition, multiplication, division, and `rsqrt`) are algebraic, an accelerator can execute training steps autonomously without host CPU synchronization stalls.
+### 350M Head-to-Head Sweep Comparison
+
+| Architecture | Optimizer | Best Winning Arm | Base LR | Muon LR | Held-Out NLL | Held-Out PPL | Delta NLL vs. Standard | Relative PPL Reduction |
+|---|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Standard LLaMA** | **Muon + AdamW** | `std_350m_muon_adamw_base_s42` | 0.0015 | 0.020 | 3.0625 | 21.38 | *baseline* | *baseline* |
+| **Algebraic Transformer** | **Muon + AdamW** | `alg_350m_muon_adamw_canonical_s42` | 0.0020 | 0.020 | **3.0423** | **20.95** | **-0.0203** | **+2.01%** |
+| **Standard LLaMA** | **Hybrid Muon + C-AdamW** | `std_350m_hybrid_muon_cadamw_base_s42` | 0.0015 | 0.020 | 3.0613 | 21.36 | *baseline* | *baseline* |
+| **Algebraic Transformer** | **Hybrid Muon + C-AdamW** | `alg_350m_hybrid_muon_cadamw_canonical_s42` | 0.0020 | 0.020 | **3.0436** | **20.98** | **-0.0177** | **+1.75%** |
+
+### Key Findings at 350M Scale:
+1. **Perplexity Superiority:** The Algebraic Transformer achieves lower held-out NLL and perplexity across both optimizers (**20.95 - 20.98** vs **21.36 - 21.38** for the Standard Transformer).
+2. **Learning Rate Forgiveness:** The Algebraic Transformer safely tolerates aggressive learning rates (`lr=0.0020` to `0.0030`) without gradient explosion, converging to smoother loss basins. The Standard Transformer requires constrained learning rates (`lr=0.0015` or lower) and exhibits performance degradation at lower LRs (`lr=0.0005` yielded 23.10 - 25.54 PPL).
+3. **Chinchilla-Optimal 7B Runs:** Main training runs on **7.0 Billion tokens** (6,675 steps) on FineWeb-Edu across all 16 TPUs are currently in progress.
 
 ---
 
-## Hugging Face Hub Checkpoints
+## Standalone Pure XLA Optimizers
 
-Checkpoints, evaluation outputs, and step logs are organized under [`tasmaikeni13/algebraic-transformer`](https://huggingface.co/tasmaikeni13/algebraic-transformer):
+This repository includes standalone, pure JAX/XLA implementations of three state-of-the-art optimizers:
+1. **Muon + AdamW (`muon_adamw`):**
+   * Newton-Schulz matrix polar updates for 2D weight matrices (5 iteration steps).
+   * Standard decoupled AdamW for 1D vectors, biases, and embedding tables.
+2. **Cautious AdamW (`cadamw`):**
+   * Incorporates directional sign-alignment masking ($\theta_{t+1} = \theta_t - \eta \cdot m_t / (\sqrt{v_t} + \epsilon) \cdot \mathbb{I}(g_t \cdot m_t > 0)$).
+3. **Hybrid Muon + C-AdamW (`hybrid_muon_cadamw`):**
+   * Routes 2D representations to Newton-Schulz polar updates while applying Cautious AdamW masking to embedding and normalization parameters.
 
-```text
-algebraic-transformer/
-├── README.md                      # Model card and scaling report
-├── 125M/                          # 125M models (2.5B tokens, 5 seeds)
-│   ├── standard_s42/ ... s46/     # Weights and training metadata
-│   ├── algebraic_s42/ ... s46/    # Weights and training metadata
-│   └── evaluations/               # Comparisons and benchmark outputs
-└── 350m/                          # 350M models (7.0B tokens, 3 seeds)
-    ├── standard_s42/ ... s44/     # Weights and training metadata
-    ├── algebraic_s42/ ... s44/    # Weights and training metadata
-    └── evaluations/               # Comparisons and benchmark outputs
-```
+---
+
+## Benchmark Reports & Summaries
+
+All raw metric outputs, logs, and markdown analysis documents are available under [`results/`](results/):
+* **125M Architecture Benchmark Report (5 Seeds):** [`results/architecture_comparison_125m_report.md`](results/architecture_comparison_125m_report.md)
+* **125M Algebraic Main Summary:** [`results/main_125m_summary.json`](results/main_125m_summary.json)
+* **125M Standard Main Summary:** [`results/main_125m_standard_summary.json`](results/main_125m_standard_summary.json)
+* **350M Architecture Head-to-Head Report:** [`results/hparam_sweep_350m_comparison_report.md`](results/hparam_sweep_350m_comparison_report.md)
+* **350M Algebraic Sweep Report (10 Arms):** [`results/hparam_sweep_350m_algebraic_report.md`](results/hparam_sweep_350m_algebraic_report.md)
+* **350M Standard Sweep Report (10 Arms):** [`results/hparam_sweep_350m_standard_report.md`](results/hparam_sweep_350m_standard_report.md)
 
 ---
 
 ## Environment & Reproduction
 
-Python 3.10+ setup:
+### Python Environment
+Requires Python 3.10+ and JAX:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e . --no-deps
-JAX_PLATFORMS=cpu python -m pytest -q tests/test_components.py tests/test_experiments.py
+
+# Run unit tests on CPU
+JAX_PLATFORMS=cpu pytest -v tests/
 ```
 
-For TPU training, install `requirements-tpu.txt`. The codebase is pinned to JAX 0.6.2 and uses `scripts/tpu_python.sh` to target local TPU chips.
+### Multi-Host Cloud TPU v4-32 Pod Slice
+To execute distributed training across 16 TPU chips (4 worker hosts `w0`, `w1`, `w2`, `w3`):
+
+```bash
+# 1. Sync workers
+bash scripts/setup_workers.sh w0 w1 w2 w3
+
+# 2. Run data-parallel slice
+python3 scripts/run_slice.py runs/hparam_sweep_350m_algebraic/jobs.json \
+  --group hparam_sweep_350m_algebraic \
+  --hosts w0,w1,w2,w3 \
+  --skip-done
+```
 
 ---
 
 ## Acknowledgments
 
-Special thanks to Google's TPU Research Cloud (TRC) program for generously providing the Cloud TPU v4-32 compute access that made training and evaluating these models possible.
+Special thanks to Google's **TPU Research Cloud (TRC)** program for providing the Cloud TPU v4-32 compute resources used to train and evaluate these models.
 
 ---
 
