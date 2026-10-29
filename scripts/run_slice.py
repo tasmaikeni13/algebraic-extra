@@ -184,6 +184,11 @@ def main():
                     print_worker_failure_logs(hosts, root / name)
                     raise RuntimeError(f"{name}: worker failed with exit codes {failed}; see logs above")
 
+                # Periodically mirror logs from w2 (TPU slice coordinator)
+                if not log_jsonl.is_file() or int(time.monotonic() - t0) % 10 < 2:
+                    arm_dir.mkdir(parents=True, exist_ok=True)
+                    subprocess.run(["rsync", "-q", "-a", f"w2:{arm_dir}/", f"{arm_dir}/"], check=False, timeout=5)
+
                 # Read live telemetry from log.jsonl
                 if log_jsonl.is_file():
                     try:
@@ -262,6 +267,11 @@ def main():
 
         elapsed_min = (time.monotonic() - t0) / 60.0
         print(f"[{ist_now_str()}] [Arm {job_idx+1}/{total_jobs} Completed] {name} in {elapsed_min:.1f} min", flush=True)
+
+        # Mirror completed arm artifacts from coordinator w2 to w0
+        arm_dir.mkdir(parents=True, exist_ok=True)
+        for h in ("w2", "w1", "w3"):
+            subprocess.run(["rsync", "-q", "-a", f"{h}:{arm_dir}/", f"{arm_dir}/"], check=False, timeout=15)
 
         # Read result metrics
         res_info = {}
