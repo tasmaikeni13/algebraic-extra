@@ -1,0 +1,183 @@
+{
+  "created_at": "2026-10-29 11:11:21 IST",
+  "architecture_title": "350M Algebraic Transformer",
+  "group": "hparam_sweep_350m_algebraic",
+  "total_arms": 10,
+  "budget_per_arm": "600M tokens (573 steps)",
+  "selected_winners": {
+    "muon_adamw": {
+      "name": "alg_350m_muon_adamw_canonical_s42",
+      "optimizer": "muon_adamw",
+      "tag": "canonical",
+      "lr": 0.002,
+      "wd": 0.1,
+      "muon_lr": 0.02,
+      "muon_wd": 0.1,
+      "cautious_eps": null,
+      "final_eval_nll": 3.042258518641112,
+      "final_eval_ppl": 20.952511474643707,
+      "final_train_loss": 2.950637102127075,
+      "train_seconds": 1223.3341100215912
+    },
+    "hybrid_muon_cadamw": {
+      "name": "alg_350m_hybrid_muon_cadamw_canonical_s42",
+      "optimizer": "hybrid_muon_cadamw",
+      "tag": "canonical",
+      "lr": 0.002,
+      "wd": 0.1,
+      "muon_lr": 0.02,
+      "muon_wd": 0.1,
+      "cautious_eps": 0.001,
+      "final_eval_nll": 3.0436266211212657,
+      "final_eval_ppl": 20.981196274956716,
+      "final_train_loss": 2.953256368637085,
+      "train_seconds": 1225.3561136722565
+    }
+  },
+  "results_by_optimizer": {
+    "muon_adamw": [
+      {
+        "name": "alg_350m_muon_adamw_base_s42",
+        "optimizer": "muon_adamw",
+        "tag": "base",
+        "lr": 0.0025,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.05,
+        "cautious_eps": null,
+        "final_eval_nll": 3.05359583018256,
+        "final_eval_ppl": 21.19140828974632,
+        "final_train_loss": 2.9605214595794678,
+        "train_seconds": 1224.0875096321106
+      },
+      {
+        "name": "alg_350m_muon_adamw_low_lr_s42",
+        "optimizer": "muon_adamw",
+        "tag": "low_lr",
+        "lr": 0.0015,
+        "wd": 0.1,
+        "muon_lr": 0.015,
+        "muon_wd": 0.05,
+        "cautious_eps": null,
+        "final_eval_nll": 3.0888757510263414,
+        "final_eval_ppl": 21.95238415200911,
+        "final_train_loss": 3.003357172012329,
+        "train_seconds": 1223.5395684242249
+      },
+      {
+        "name": "alg_350m_muon_adamw_high_lr_s42",
+        "optimizer": "muon_adamw",
+        "tag": "high_lr",
+        "lr": 0.003,
+        "wd": 0.1,
+        "muon_lr": 0.03,
+        "muon_wd": 0.05,
+        "cautious_eps": null,
+        "final_eval_nll": 3.045349998552291,
+        "final_eval_ppl": 21.017385970388016,
+        "final_train_loss": 2.951765537261963,
+        "train_seconds": 1222.9721472263336
+      },
+      {
+        "name": "alg_350m_muon_adamw_low_wd_s42",
+        "optimizer": "muon_adamw",
+        "tag": "low_wd",
+        "lr": 0.0025,
+        "wd": 0.05,
+        "muon_lr": 0.02,
+        "muon_wd": 0.02,
+        "cautious_eps": null,
+        "final_eval_nll": 3.0703470101121995,
+        "final_eval_ppl": 21.549379230211766,
+        "final_train_loss": 2.978531837463379,
+        "train_seconds": 1223.4262261390686
+      },
+      {
+        "name": "alg_350m_muon_adamw_canonical_s42",
+        "optimizer": "muon_adamw",
+        "tag": "canonical",
+        "lr": 0.002,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": null,
+        "final_eval_nll": 3.042258518641112,
+        "final_eval_ppl": 20.952511474643707,
+        "final_train_loss": 2.950637102127075,
+        "train_seconds": 1223.3341100215912
+      }
+    ],
+    "hybrid_muon_cadamw": [
+      {
+        "name": "alg_350m_hybrid_muon_cadamw_base_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "tag": "base",
+        "lr": 0.0025,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.05,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.0561084278294297,
+        "final_eval_ppl": 21.244720720645773,
+        "final_train_loss": 2.9626412391662598,
+        "train_seconds": 1224.1888537406921
+      },
+      {
+        "name": "alg_350m_hybrid_muon_cadamw_low_lr_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "tag": "low_lr",
+        "lr": 0.0015,
+        "wd": 0.1,
+        "muon_lr": 0.015,
+        "muon_wd": 0.05,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.0852551167128515,
+        "final_eval_ppl": 21.873046310011894,
+        "final_train_loss": 2.999379873275757,
+        "train_seconds": 1223.1196520328522
+      },
+      {
+        "name": "alg_350m_hybrid_muon_cadamw_high_lr_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "tag": "high_lr",
+        "lr": 0.003,
+        "wd": 0.1,
+        "muon_lr": 0.03,
+        "muon_wd": 0.05,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.0489539044802307,
+        "final_eval_ppl": 21.093267304742096,
+        "final_train_loss": 2.9564905166625977,
+        "train_seconds": 1223.3631358146667
+      },
+      {
+        "name": "alg_350m_hybrid_muon_cadamw_low_wd_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "tag": "low_wd",
+        "lr": 0.0025,
+        "wd": 0.05,
+        "muon_lr": 0.02,
+        "muon_wd": 0.02,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.0711827747157363,
+        "final_eval_ppl": 21.56739696684504,
+        "final_train_loss": 2.9796297550201416,
+        "train_seconds": 1222.9809167385101
+      },
+      {
+        "name": "alg_350m_hybrid_muon_cadamw_canonical_s42",
+        "optimizer": "hybrid_muon_cadamw",
+        "tag": "canonical",
+        "lr": 0.002,
+        "wd": 0.1,
+        "muon_lr": 0.02,
+        "muon_wd": 0.1,
+        "cautious_eps": 0.001,
+        "final_eval_nll": 3.0436266211212657,
+        "final_eval_ppl": 20.981196274956716,
+        "final_train_loss": 2.953256368637085,
+        "train_seconds": 1225.3561136722565
+      }
+    ]
+  }
+}
