@@ -1,0 +1,56 @@
+{
+  "generated_at_ist": "2026-10-30 10:05:53 IST",
+  "scale": "350M Active Parameters",
+  "tokens_per_run": 7000000000,
+  "seed": 42,
+  "results": {
+    "main_350m_alg_muon_adamw_s42": {
+      "name": "main_350m_alg_muon_adamw_s42",
+      "arch": "algebraic",
+      "optimizer": "muon_adamw",
+      "lr": 0.002,
+      "muon_lr": 0.02,
+      "final_eval_nll": 2.4908523559570312,
+      "final_eval_ppl": 12.071561003563401,
+      "final_train_loss": 2.495574951171875,
+      "tokens_per_second": 0,
+      "train_seconds": 13534.844132900238
+    },
+    "main_350m_alg_hybrid_muon_cadamw_s42": {
+      "name": "main_350m_alg_hybrid_muon_cadamw_s42",
+      "arch": "algebraic",
+      "optimizer": "hybrid_muon_cadamw",
+      "lr": 0.002,
+      "muon_lr": 0.02,
+      "final_eval_nll": 2.494335235142317,
+      "final_eval_ppl": 12.113678093910357,
+      "final_train_loss": 2.4993772506713867,
+      "tokens_per_second": 0,
+      "train_seconds": 13536.46743965149
+    },
+    "main_350m_std_muon_adamw_s42": {
+      "name": "main_350m_std_muon_adamw_s42",
+      "arch": "standard",
+      "optimizer": "muon_adamw",
+      "lr": 0.0015,
+      "muon_lr": 0.02,
+      "final_eval_nll": 2.5036228152572133,
+      "final_eval_ppl": 12.226708928666147,
+      "final_train_loss": 2.5084991455078125,
+      "tokens_per_second": 0,
+      "train_seconds": 12194.558564186096
+    },
+    "main_350m_std_hybrid_muon_cadamw_s42": {
+      "name": "main_350m_std_hybrid_muon_cadamw_s42",
+      "arch": "standard",
+      "optimizer": "hybrid_muon_cadamw",
+      "lr": 0.0015,
+      "muon_lr": 0.02,
+      "final_eval_nll": 2.5066141144174043,
+      "final_eval_ppl": 12.263337428905116,
+      "final_train_loss": 2.511819362640381,
+      "tokens_per_second": 0,
+      "train_seconds": 12198.409466266632
+    }
+  }
+}
