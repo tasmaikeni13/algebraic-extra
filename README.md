@@ -93,7 +93,7 @@ Evaluated at each power-of-2 context position on held-out FineWeb-Edu validation
 
 At 350M scale ($D_{\text{model}}=1024, L=24, H=16, D_{\text{head}}=64, D_{\text{ff}}=2688$, active parameters: `332,453,248` non-embedding weights), models were evaluated across extensive 10-arm hyperparameter grids on 600M tokens each (20 arms total):
 
-### 350M Head-to-Head Sweep Comparison
+### 350M Head-to-Head Sweep Comparison (600M Tokens per Arm)
 
 | Architecture | Optimizer | Best Winning Arm | Base LR | Muon LR | Held-Out NLL | Held-Out PPL | Delta NLL vs. Standard | Relative PPL Reduction |
 |---|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -102,10 +102,23 @@ At 350M scale ($D_{\text{model}}=1024, L=24, H=16, D_{\text{head}}=64, D_{\text{
 | **Standard LLaMA** | **Hybrid Muon + C-AdamW** | `std_350m_hybrid_muon_cadamw_base_s42` | 0.0015 | 0.020 | 3.0613 | 21.36 | *baseline* | *baseline* |
 | **Algebraic Transformer** | **Hybrid Muon + C-AdamW** | `alg_350m_hybrid_muon_cadamw_canonical_s42` | 0.0020 | 0.020 | **3.0436** | **20.98** | **-0.0177** | **+1.75%** |
 
+---
+
+### 350M Main Benchmark Results (7.0 Billion Tokens per Run, Seed 42)
+
+Full-scale evaluation on FineWeb-Edu (7.0B tokens / 6,675 steps per run, batch size 512, sequence length 2,048 across 16 Cloud TPU v4 chips) using the optimal sweep hyperparameters:
+
+| Architecture | Optimizer | Held-Out NLL (nats) | Held-Out Perplexity | Final Train Loss | Delta NLL vs. Standard | Relative PPL Reduction | Runtime |
+|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Standard LLaMA** | **Muon + AdamW** | 2.5036 | 12.23 | 2.5085 | *baseline* | *baseline* | 3.39 hrs |
+| **Algebraic Transformer** | **Muon + AdamW** | **2.4909** | **12.07** | **2.4956** | **-0.0128** | **+1.27%** | 3.76 hrs |
+| **Standard LLaMA** | **Hybrid Muon + C-AdamW** | 2.5066 | 12.26 | 2.5118 | *baseline* | *baseline* | 3.39 hrs |
+| **Algebraic Transformer** | **Hybrid Muon + C-AdamW** | **2.4943** | **12.11** | **2.4994** | **-0.0123** | **+1.22%** | 3.76 hrs |
+
 ### Key Findings at 350M Scale:
-1. **Perplexity Superiority:** The Algebraic Transformer achieves lower held-out NLL and perplexity across both optimizers (**20.95 - 20.98** vs **21.36 - 21.38** for the Standard Transformer).
+1. **Consistent Scaling Advantage:** Across both optimizers and both compute scales (600M tokens and 7.0B tokens), the Algebraic Transformer consistently achieves lower held-out NLL and lower perplexity than the Standard LLaMA Transformer (**12.07 vs. 12.23 PPL** at 7B tokens).
 2. **Learning Rate Forgiveness:** The Algebraic Transformer safely tolerates aggressive learning rates (`lr=0.0020` to `0.0030`) without gradient explosion, converging to smoother loss basins. The Standard Transformer requires constrained learning rates (`lr=0.0015` or lower) and exhibits performance degradation at lower LRs (`lr=0.0005` yielded 23.10 - 25.54 PPL).
-3. **Chinchilla-Optimal 7B Runs:** Main training runs on **7.0 Billion tokens** (6,675 steps) on FineWeb-Edu across all 16 TPUs are currently in progress.
+3. **No Representation Capacity Loss:** Despite completely removing all transcendentals (no $\exp$, no $\ln$, no $\sin$, no $\cos$), the Algebraic Transformer achieves strictly lower final training loss (**2.4956 vs. 2.5085**) and better generalization.
 
 ---
 
@@ -125,12 +138,14 @@ This repository includes standalone, pure JAX/XLA implementations of three state
 ## Benchmark Reports & Summaries
 
 All raw metric outputs, logs, and markdown analysis documents are available under [`results/`](results/):
+* **350M Architecture Benchmark Report (7B Tokens):** [`results/main_350m_report.md`](results/main_350m_report.md)
+* **350M Benchmark Summary JSON:** [`results/main_350m_summary.json`](results/main_350m_summary.json)
+* **350M Architecture Sweep Comparison Report:** [`results/hparam_sweep_350m_comparison_report.md`](results/hparam_sweep_350m_comparison_report.md)
+* **350M Algebraic Sweep Report (10 Arms):** [`results/hparam_sweep_350m_algebraic_report.md`](results/hparam_sweep_350m_algebraic_report.md)
+* **350M Standard Sweep Report (10 Arms):** [`results/hparam_sweep_350m_standard_report.md`](results/hparam_sweep_350m_standard_report.md)
 * **125M Architecture Benchmark Report (5 Seeds):** [`results/architecture_comparison_125m_report.md`](results/architecture_comparison_125m_report.md)
 * **125M Algebraic Main Summary:** [`results/main_125m_summary.json`](results/main_125m_summary.json)
 * **125M Standard Main Summary:** [`results/main_125m_standard_summary.json`](results/main_125m_standard_summary.json)
-* **350M Architecture Head-to-Head Report:** [`results/hparam_sweep_350m_comparison_report.md`](results/hparam_sweep_350m_comparison_report.md)
-* **350M Algebraic Sweep Report (10 Arms):** [`results/hparam_sweep_350m_algebraic_report.md`](results/hparam_sweep_350m_algebraic_report.md)
-* **350M Standard Sweep Report (10 Arms):** [`results/hparam_sweep_350m_standard_report.md`](results/hparam_sweep_350m_standard_report.md)
 
 ---
 
