@@ -108,12 +108,12 @@ At 350M scale ($D_{\text{model}}=1024, L=24, H=16, D_{\text{head}}=64, D_{\text{
 
 Full-scale evaluation on FineWeb-Edu (7.0B tokens / 6,675 steps per run, batch size 512, sequence length 2,048 across 16 Cloud TPU v4 chips) using the optimal sweep hyperparameters:
 
-| Architecture | Optimizer | Held-Out NLL (nats) | Held-Out Perplexity | Final Train Loss | Delta NLL vs. Standard | Relative PPL Reduction | Runtime |
-|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Standard LLaMA** | **Muon + AdamW** | 2.5036 | 12.23 | 2.5085 | *baseline* | *baseline* | 3.39 hrs |
-| **Algebraic Transformer** | **Muon + AdamW** | **2.4909** | **12.07** | **2.4956** | **-0.0128** | **+1.27%** | 3.76 hrs |
-| **Standard LLaMA** | **Hybrid Muon + C-AdamW** | 2.5066 | 12.26 | 2.5118 | *baseline* | *baseline* | 3.39 hrs |
-| **Algebraic Transformer** | **Hybrid Muon + C-AdamW** | **2.4943** | **12.11** | **2.4994** | **-0.0123** | **+1.22%** | 3.76 hrs |
+| Architecture | Optimizer | Held-Out NLL (nats) | Held-Out Perplexity | Final Train Loss | Delta NLL vs. Standard | Relative PPL Reduction | Throughput | Runtime |
+|---|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Standard LLaMA** | **Muon + AdamW** | 2.5036 | 12.23 | 2.5085 | *baseline* | *baseline* | 574k tok/s | 3.39 hrs |
+| **Algebraic Transformer** | **Muon + AdamW** | **2.4909** | **12.07** | **2.4956** | **-0.0128** | **+1.27%** | 517k tok/s | 3.76 hrs |
+| **Standard LLaMA** | **Hybrid Muon + C-AdamW** | 2.5066 | 12.26 | 2.5118 | *baseline* | *baseline* | 574k tok/s | 3.39 hrs |
+| **Algebraic Transformer** | **Hybrid Muon + C-AdamW** | **2.4943** | **12.11** | **2.4994** | **-0.0123** | **+1.22%** | 517k tok/s | 3.76 hrs |
 
 ### Key Findings at 350M Scale:
 1. **Consistent Scaling Advantage:** Across both optimizers and both compute scales (600M tokens and 7.0B tokens), the Algebraic Transformer consistently achieves lower held-out NLL and lower perplexity than the Standard LLaMA Transformer (**12.07 vs. 12.23 PPL** at 7B tokens).
